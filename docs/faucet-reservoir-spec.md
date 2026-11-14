@@ -114,7 +114,7 @@ Komponen (semua di sisi pool/miner, TANPA ubah konsensus):
 | Refund/sweep surplus floor ke dana miner | Belum | Saldo di atas floor menghentikan cut baru; tidak memindahkan surplus lama |
 | Withdrawal klaim on-chain | Ada jalur di source lokal | Bergantung konfigurasi alamat + signing key; belum dibuktikan live |
 | Miners Android menerima subsidi on-chain | Belum | Ada fungsi hitung budget, tapi belum ada penerima, ledger payout, atau pengiriman transaksi |
-| Deploy mainnet | Belum | Binary VPS masih SHA `b5075740c80d41effb7b5774380d1f1ef95690e2b5c7607ef57a68c454785cf9` (mtime 13 Nov); source lokal belum commit/push |
+| Deploy mainnet | Belum | VPS masih binary lama `stratum-bridge` 7 Nov (SHA256 `f6c0b6a9ad337fcdc4022a1c67289f7e6ddd0100aa21e412165c2bb895e3ffe4`, `/root/stratum-bridge-mainnet.yaml`); lokal 2 commit ahead origin, release binary lokal sedang dibangun ulang dari HEAD |
 
 Koreksi atas bagian dokumen lama: `share_handler.rs` belum benar-benar membayar PPLNS. Saat ini ia menghitung `faucet_cut_pradha` dan distribusi miner lalu menulis log; komentar kodenya menyatakan transaksi payout menyusul. Juga, saldo reservoir yang sudah mencapai floor hanya mematikan **cut selanjutnya**; klaim/withdraw dapat membuat saldo turun lagi, dan tidak ada transfer ke alamat miner untuk surplus yang telanjur terkumpul.
 
