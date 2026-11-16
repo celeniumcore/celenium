@@ -88,6 +88,8 @@ pub struct FaucetEntry {
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct FaucetState {
+    #[serde(skip)]
+    pub(crate) storage_uncertain: bool,
     ledger: HashMap<String, FaucetEntry>,
     /// device_id (Android ID) → set address wallet yang pernah klaim.
     devices: HashMap<String, HashSet<String>>,
@@ -118,6 +120,7 @@ pub enum ClaimError {
     /// Belum ada porsi yang terakru sejak 00:00 UTC, atau porsi hari ini
     /// seluruhnya sudah diambil.
     NothingAccrued,
+    StorageUnavailable,
     DailyCapReached,
     ReservoirFull,
     InvalidAddress,
@@ -129,6 +132,7 @@ impl std::fmt::Display for ClaimError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             ClaimError::NothingAccrued => "no reward accrued yet; it drips in over 24h from 00:00 UTC",
+            ClaimError::StorageUnavailable => "faucet storage needs recovery; retry after the operator restores it",
             ClaimError::DailyCapReached => "daily faucet cap reached",
             ClaimError::ReservoirFull => "faucet liability cap reached",
             ClaimError::InvalidAddress => "address is not a valid Celenium address",
@@ -143,6 +147,7 @@ impl ClaimError {
     pub fn code(self) -> &'static str {
         match self {
             Self::NothingAccrued => "NothingAccrued",
+            Self::StorageUnavailable => "StorageUnavailable",
             Self::DailyCapReached => "DailyCapReached",
             Self::ReservoirFull => "ReservoirFull",
             Self::InvalidAddress => "InvalidAddress",
@@ -164,15 +169,22 @@ struct ClaimAmounts {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WithdrawError {
+    StorageUnavailable,
     /// Alamat menarik lagi sebelum jeda antar-withdraw lewat.
-    Cooldown { remaining_secs: u64 },
+    Cooldown {
+        remaining_secs: u64,
+    },
     /// Anggaran fee on-chain hari ini sudah habis.
-    FeeBudgetExhausted { used_pradha: u64, budget_pradha: u64 },
+    FeeBudgetExhausted {
+        used_pradha: u64,
+        budget_pradha: u64,
+    },
 }
 
 impl std::fmt::Display for WithdrawError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            WithdrawError::StorageUnavailable => f.write_str("faucet storage needs recovery; withdrawals paused"),
             WithdrawError::Cooldown { remaining_secs } => {
                 write!(f, "please wait {remaining_secs} seconds before withdrawing again")
             }
@@ -260,6 +272,9 @@ impl FaucetState {
     }
 
     fn check_payout_at(&self, address: &str, now: u64, payout: u64) -> Result<(), ClaimError> {
+        if self.storage_uncertain {
+            return Err(ClaimError::StorageUnavailable);
+        }
         Self::validate_address(address)?;
         let day = now / DAY_SECS;
         // Jangan membuka ulang hari yang sudah dilewati setelah koreksi jam server.
@@ -404,6 +419,9 @@ impl FaucetState {
     /// plafon fee harian global (dicek dulu: ini batas keras) dan jeda per
     /// alamat (satu penarikan per jam).
     pub fn check_withdraw(&self, address: &str) -> Result<(), WithdrawError> {
+        if self.storage_uncertain {
+            return Err(WithdrawError::StorageUnavailable);
+        }
         let used = if self.fee_day == Self::current_day() { self.fees_today_pradha } else { 0 };
         if used >= FAUCET_DAILY_FEE_BUDGET_PRADHA {
             return Err(WithdrawError::FeeBudgetExhausted { used_pradha: used, budget_pradha: FAUCET_DAILY_FEE_BUDGET_PRADHA });
@@ -493,7 +511,21 @@ impl FaucetState {
         }
     }
 
-    pub fn save(&self, path: &Path) -> std::io::Result<()> {
+    pub fn save(&mut self, path: &Path) -> std::io::Result<()> {
+        self.save_with_directory_sync(path, |dir| {
+            #[cfg(unix)]
+            {
+                std::fs::File::open(dir)?.sync_all()
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = dir;
+                Ok(())
+            }
+        })
+    }
+
+    fn save_with_directory_sync(&mut self, path: &Path, sync_dir: impl FnOnce(&Path) -> std::io::Result<()>) -> std::io::Result<()> {
         use std::io::Write;
         let bytes = serde_json::to_vec_pretty(self)?;
         let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
@@ -512,11 +544,10 @@ impl FaucetState {
             file.sync_all()?;
             drop(file);
             std::fs::rename(&temp, path)?;
-            // Setelah rename, memori harus mengikuti ledger yang telah terpasang.
-            #[cfg(unix)]
-            if let Err(e) = std::fs::File::open(dir).and_then(|d| d.sync_all()) {
-                tracing::warn!("faucet directory sync failed after ledger replacement: {e}");
-            }
+            // Rename sudah mengubah ledger; jangan membuang state ini jika fsync gagal.
+            self.storage_uncertain = true;
+            sync_dir(dir)?;
+            self.storage_uncertain = false;
             Ok(())
         })();
         if result.is_err() {
@@ -622,6 +653,24 @@ mod tests {
         let mut loaded = FaucetState::load(&path).unwrap();
         assert_eq!(loaded.claim_at(ADDR, "device", START + 1800), Err(ClaimError::NothingAccrued));
         assert_eq!(loaded.claim_at(ADDR, "device", START + 3600).unwrap().balance_pradha, 41);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn directory_sync_failure_retains_credit_and_blocks_mutations() {
+        let path = std::env::temp_dir().join(format!("faucet-sync-{}.json", uuid::Uuid::new_v4()));
+        let mut s = FaucetState::default();
+        s.claim_at(ADDR, "device", START + 1800).unwrap();
+        let result = s.save_with_directory_sync(&path, |_| Err(std::io::Error::other("injected directory sync failure")));
+        assert!(result.is_err());
+        assert!(s.storage_uncertain);
+        assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 20);
+        assert_eq!(FaucetState::load(&path).unwrap().balance(ADDR).unwrap().balance_pradha, 20);
+        assert_eq!(s.claim_at(ADDR, "device", START + 3600), Err(ClaimError::StorageUnavailable));
+        assert_eq!(s.check_withdraw(ADDR), Err(WithdrawError::StorageUnavailable));
+        s.save(&path).unwrap();
+        assert!(!s.storage_uncertain);
+        assert_eq!(s.claim_at(ADDR, "device", START + 3600).unwrap().balance_pradha, 41);
         std::fs::remove_file(path).unwrap();
     }
 

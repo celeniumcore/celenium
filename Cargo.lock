@@ -2008,6 +2008,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "parking_lot",
+ "percent-encoding",
  "prometheus",
  "rand 0.8.6",
  "regex",
