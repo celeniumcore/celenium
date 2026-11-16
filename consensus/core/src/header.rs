@@ -2,13 +2,13 @@ use crate::{BlueWorkType, hashing};
 use alloc::vec;
 use alloc::vec::Vec;
 use borsh::{BorshDeserialize, BorshSerialize};
-#[cfg(feature = "mem_size")]
-use core::mem::size_of;
-use itertools::Itertools;
 use celenium_hashes::Hash;
 use celenium_utils::iter::{IterExtensions, IterExtensionsRle};
 #[cfg(feature = "mem_size")]
 use celenium_utils::mem_size::MemSizeEstimator;
+#[cfg(feature = "mem_size")]
+use core::mem::size_of;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 /// An efficient run-length encoding for the parent-by-level vector in the block header.

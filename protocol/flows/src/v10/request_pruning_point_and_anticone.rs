@@ -3,7 +3,6 @@
 //! since the syncee no longer uses them in the rusty-celenium design where the full sub-DAG is sent
 //!
 
-use itertools::Itertools;
 use celenium_consensus_core::{block::Block, trusted::TrustedHeader};
 use celenium_p2p_lib::{
     IncomingRoute, Router,
@@ -14,6 +13,7 @@ use celenium_p2p_lib::{
         TrustedDataChunksEndMessage, TrustedDataMessage, celeniumd_message::Payload,
     },
 };
+use itertools::Itertools;
 use log::{debug, info, warn};
 use std::{mem::size_of_val, sync::Arc};
 

@@ -1,6 +1,5 @@
 use crate::imports::*;
 use crate::result::Result;
-use js_sys::Array;
 use celenium_consensus_client::{Transaction, sign_with_multiple_v3};
 use celenium_consensus_core::hashing::wasm::SighashType;
 use celenium_consensus_core::sign::sign_input;
@@ -9,6 +8,7 @@ use celenium_consensus_core::{hashing::sighash_type::SIG_HASH_ALL, sign::verify}
 use celenium_hashes::Hash;
 use celenium_wallet_keys::privatekey::PrivateKey;
 use celenium_wasm_core::types::HexString;
+use js_sys::Array;
 use serde_wasm_bindgen::from_value;
 
 #[wasm_bindgen]

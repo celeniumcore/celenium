@@ -6,13 +6,13 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use duration_string::DurationString;
-use futures_util::future::{join_all, try_join_all};
-use itertools::Itertools;
 use celenium_addressmanager::{AddressManager, NetAddress};
 use celenium_core::{debug, info, warn};
 use celenium_p2p_lib::{ConnectionError, Peer, common::ProtocolError};
 use celenium_utils::triggers::SingleTrigger;
+use duration_string::DurationString;
+use futures_util::future::{join_all, try_join_all};
+use itertools::Itertools;
 use parking_lot::Mutex as ParkingLotMutex;
 use rand::{seq::SliceRandom, thread_rng};
 use tokio::{

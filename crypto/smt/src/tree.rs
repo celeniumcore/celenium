@@ -13,8 +13,8 @@
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
-use core::marker::PhantomData;
 use celenium_hashes::Hash;
+use core::marker::PhantomData;
 
 use crate::proof::{OwnedSmtProof, ProofTerminal};
 use crate::store::{BTreeSmtStore, BranchKey, CollapsedLeaf, LeafUpdate, Node, SmtStore, SortedLeafUpdates, SortedLeafUpdatesRef};

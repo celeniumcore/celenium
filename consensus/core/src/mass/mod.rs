@@ -737,7 +737,12 @@ mod tests {
             },
             PluralityTestCase {
                 name: "4:6; output index=0, plurality=3; kas units",
-                inputs_tx1: &[350 * PRADHA_PER_CELENIUM, 500 * PRADHA_PER_CELENIUM, 350 * PRADHA_PER_CELENIUM, 500 * PRADHA_PER_CELENIUM],
+                inputs_tx1: &[
+                    350 * PRADHA_PER_CELENIUM,
+                    500 * PRADHA_PER_CELENIUM,
+                    350 * PRADHA_PER_CELENIUM,
+                    500 * PRADHA_PER_CELENIUM,
+                ],
                 outputs_tx1: &[
                     200 * PRADHA_PER_CELENIUM,
                     200 * PRADHA_PER_CELENIUM,
@@ -746,8 +751,18 @@ mod tests {
                     250 * PRADHA_PER_CELENIUM,
                     250 * PRADHA_PER_CELENIUM,
                 ],
-                inputs_tx2: &[350 * PRADHA_PER_CELENIUM, 500 * PRADHA_PER_CELENIUM, 350 * PRADHA_PER_CELENIUM, 500 * PRADHA_PER_CELENIUM],
-                outputs_tx2: &[200 * PRADHA_PER_CELENIUM, 200 * PRADHA_PER_CELENIUM, 400 * PRADHA_PER_CELENIUM, 750 * PRADHA_PER_CELENIUM],
+                inputs_tx2: &[
+                    350 * PRADHA_PER_CELENIUM,
+                    500 * PRADHA_PER_CELENIUM,
+                    350 * PRADHA_PER_CELENIUM,
+                    500 * PRADHA_PER_CELENIUM,
+                ],
+                outputs_tx2: &[
+                    200 * PRADHA_PER_CELENIUM,
+                    200 * PRADHA_PER_CELENIUM,
+                    400 * PRADHA_PER_CELENIUM,
+                    750 * PRADHA_PER_CELENIUM,
+                ],
                 plurality_index: Some(3),
                 desired_plurality: Some(3),
                 override_output: true,

@@ -1,7 +1,6 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
 use crate::common::{client_notify::ChannelNotify, daemon::Daemon};
-use futures_util::future::try_join_all;
 use celenium_addresses::{Address, Prefix, Version};
 use celenium_consensus::params::SIMNET_GENESIS;
 use celenium_consensus_core::{
@@ -23,6 +22,7 @@ use celenium_notify::{
 use celenium_rpc_core::{Notification, api::rpc::RpcApi, model::*};
 use celenium_utils::{fd_budget, networking::ContextualNetAddress};
 use celeniumd_lib::args::Args;
+use futures_util::future::try_join_all;
 use tokio::task::JoinHandle;
 
 #[macro_export]

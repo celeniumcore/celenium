@@ -2,9 +2,6 @@
 
 pub use ahash::AHashMap;
 pub use async_lock::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
-pub use cfg_if::cfg_if;
-pub use futures::*;
-pub use js_sys::Function;
 pub use celenium_consensus_core::network::{NetworkId, NetworkIdError, NetworkIdT};
 pub use celenium_notify::{
     error::{Error as NotifyError, Result as NotifyResult},
@@ -24,6 +21,9 @@ pub use celenium_rpc_core::{
 pub use celenium_wrpc_client::client::*;
 pub use celenium_wrpc_client::error::Error;
 pub use celenium_wrpc_client::result::Result;
+pub use cfg_if::cfg_if;
+pub use futures::*;
+pub use js_sys::Function;
 pub use serde::{Deserialize, Serialize};
 pub use std::str::FromStr;
 pub use std::sync::{

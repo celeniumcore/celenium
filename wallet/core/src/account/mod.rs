@@ -559,7 +559,8 @@ pub trait Account: AnySync + Send + Sync + 'static {
         payload: Option<Vec<u8>>,
         abortable: &Abortable,
     ) -> Result<GeneratorSummary> {
-        let settings = GeneratorSettings::try_new_with_account(self.as_dyn_arc(), destination, fee_rate, priority_fee_pradha, payload)?;
+        let settings =
+            GeneratorSettings::try_new_with_account(self.as_dyn_arc(), destination, fee_rate, priority_fee_pradha, payload)?;
 
         let generator = Generator::try_new(settings, None, Some(abortable))?;
 

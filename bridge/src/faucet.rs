@@ -149,10 +149,9 @@ impl std::fmt::Display for WithdrawError {
             WithdrawError::Cooldown { remaining_secs } => {
                 write!(f, "please wait {remaining_secs} seconds before withdrawing again")
             }
-            WithdrawError::FeeBudgetExhausted { used_pradha, budget_pradha } => write!(
-                f,
-                "daily faucet fee budget exhausted ({used_pradha}/{budget_pradha} pradha); try again after 00:00 UTC"
-            ),
+            WithdrawError::FeeBudgetExhausted { used_pradha, budget_pradha } => {
+                write!(f, "daily faucet fee budget exhausted ({used_pradha}/{budget_pradha} pradha); try again after 00:00 UTC")
+            }
         }
     }
 }
@@ -161,10 +160,7 @@ impl std::error::Error for WithdrawError {}
 
 impl FaucetState {
     pub fn current_day() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() / DAY_SECS)
-            .unwrap_or(0)
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() / DAY_SECS).unwrap_or(0)
     }
 
     fn roll_day(&mut self) {
@@ -185,11 +181,7 @@ impl FaucetState {
 
     /// Jumlah klaim berhasil yang sudah tercatat pada hari ini.
     pub fn claimants_today(&self) -> u64 {
-        if Self::current_day() == self.claim_day {
-            self.claimants_today
-        } else {
-            0
-        }
+        if Self::current_day() == self.claim_day { self.claimants_today } else { 0 }
     }
 
     /// Perkiraan jumlah klaim hari ini.
@@ -233,11 +225,7 @@ impl FaucetState {
         }
         let slots_left = self.expected_claimants_today().saturating_sub(claimants).max(1);
         let share = remaining / slots_left;
-        if share == 0 {
-            FAUCET_MIN_REWARD_PRADHA
-        } else {
-            share.min(FAUCET_MAX_REWARD_PRADHA)
-        }
+        if share == 0 { FAUCET_MIN_REWARD_PRADHA } else { share.min(FAUCET_MAX_REWARD_PRADHA) }
     }
 
     /// Klaim harian untuk `address`. Kembalikan saldo baru bila berhasil.
@@ -270,8 +258,7 @@ impl FaucetState {
         // milik klaim, dan subsidinya baru ketahuan kurang saat penarikan gagal.
         let now = Self::now_secs();
         let month = crate::emission_policy::month_since_genesis(now);
-        let outstanding_cap =
-            crate::emission_policy::claim_bucket_pradha(month).min(FAUCET_MAX_OUTSTANDING_PRADHA);
+        let outstanding_cap = crate::emission_policy::claim_bucket_pradha(month).min(FAUCET_MAX_OUTSTANDING_PRADHA);
         let daily_cap = crate::emission_policy::daily_cap_pradha(month);
         // Reward yang berlaku untuk klaim ini, dihitung dari sisa anggaran dan
         // sisa slot yang diperkirakan. NIlainya bisa turun sampai 1 pradha saat
@@ -315,18 +302,11 @@ impl FaucetState {
         if Self::current_day() != self.claim_day {
             return 0;
         }
-        self.ledger
-            .get(address)
-            .filter(|e| e.last_claim_day == self.claim_day)
-            .map(|e| e.last_claim_reward_pradha)
-            .unwrap_or(0)
+        self.ledger.get(address).filter(|e| e.last_claim_day == self.claim_day).map(|e| e.last_claim_reward_pradha).unwrap_or(0)
     }
 
     fn now_secs() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
     }
 
     fn roll_fee_day(&mut self) {
@@ -345,10 +325,7 @@ impl FaucetState {
     pub fn check_withdraw(&self, address: &str) -> Result<(), WithdrawError> {
         let used = if self.fee_day == Self::current_day() { self.fees_today_pradha } else { 0 };
         if used >= FAUCET_DAILY_FEE_BUDGET_PRADHA {
-            return Err(WithdrawError::FeeBudgetExhausted {
-                used_pradha: used,
-                budget_pradha: FAUCET_DAILY_FEE_BUDGET_PRADHA,
-            });
+            return Err(WithdrawError::FeeBudgetExhausted { used_pradha: used, budget_pradha: FAUCET_DAILY_FEE_BUDGET_PRADHA });
         }
         let now = Self::now_secs();
         if let Some(e) = self.ledger.get(address)
@@ -356,9 +333,7 @@ impl FaucetState {
         {
             let elapsed = now.saturating_sub(e.last_withdraw_secs);
             if elapsed < FAUCET_WITHDRAW_COOLDOWN_SECS {
-                return Err(WithdrawError::Cooldown {
-                    remaining_secs: FAUCET_WITHDRAW_COOLDOWN_SECS.saturating_sub(elapsed),
-                });
+                return Err(WithdrawError::Cooldown { remaining_secs: FAUCET_WITHDRAW_COOLDOWN_SECS.saturating_sub(elapsed) });
             }
         }
         Ok(())
@@ -406,11 +381,7 @@ impl FaucetState {
 
     /// Klaim hari ini yang sudah dihitung (0 bila sudah ganti hari).
     pub fn claimed_today(&self) -> u64 {
-        if Self::current_day() != self.claim_day {
-            0
-        } else {
-            self.claimed_today
-        }
+        if Self::current_day() != self.claim_day { 0 } else { self.claimed_today }
     }
 
     /// Cap harian dinamis saat ini (pradha), mengikuti kebijakan emisi.
@@ -468,14 +439,13 @@ mod tests {
             FaucetEntry {
                 balance_pradha: 0,
                 last_claim_day: day.saturating_sub(1),
-                total_claimed_pradha: 0, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+                total_claimed_pradha: 0,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
 
-        assert_eq!(
-            s.claim(ADDR, "").unwrap().balance_pradha,
-            FAUCET_MAX_REWARD_PRADHA,
-            "peserta tunggal mendapat plafon penuh"
-        );
+        assert_eq!(s.claim(ADDR, "").unwrap().balance_pradha, FAUCET_MAX_REWARD_PRADHA, "peserta tunggal mendapat plafon penuh");
         assert_eq!(s.claim(ADDR, ""), Err(ClaimError::AlreadyClaimed));
     }
 
@@ -494,7 +464,10 @@ mod tests {
             FaucetEntry {
                 balance_pradha: 5000,
                 last_claim_day: 0,
-                total_claimed_pradha: 5000, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+                total_claimed_pradha: 5000,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
         assert!(s.debit(ADDR, 3000));
         assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 2000);
@@ -509,14 +482,20 @@ mod tests {
             FaucetEntry {
                 balance_pradha: 1000,
                 last_claim_day: 0,
-                total_claimed_pradha: 1000, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+                total_claimed_pradha: 1000,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
         s.ledger.insert(
             "b".into(),
             FaucetEntry {
                 balance_pradha: 2000,
                 last_claim_day: 0,
-                total_claimed_pradha: 2000, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+                total_claimed_pradha: 2000,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
         assert_eq!(s.total_outstanding(), 3000);
     }
@@ -545,7 +524,13 @@ mod tests {
             ][i];
             s.ledger.insert(
                 a.to_string(),
-                FaucetEntry { balance_pradha: 0, last_claim_day: 0, total_claimed_pradha: 0, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+                FaucetEntry {
+                    balance_pradha: 0,
+                    last_claim_day: 0,
+                    total_claimed_pradha: 0,
+                    last_claim_reward_pradha: 0,
+                    last_withdraw_secs: 0,
+                },
             );
             s.devices.entry("dev-1".to_string()).or_default().insert(a.to_string());
         }
@@ -564,7 +549,10 @@ mod tests {
             FaucetEntry {
                 balance_pradha: 7000,
                 last_claim_day: 5,
-                total_claimed_pradha: 7000, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+                total_claimed_pradha: 7000,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
         let p = std::env::temp_dir().join("faucet_test_roundtrip.json");
         s.save(&p).unwrap();
@@ -591,7 +579,8 @@ mod tests {
                 last_claim_day: 0,
                 total_claimed_pradha: cap - FAUCET_MAX_REWARD_PRADHA + 1,
                 last_claim_reward_pradha: 0,
-                last_withdraw_secs: 0 },
+                last_withdraw_secs: 0,
+            },
         );
         assert_eq!(s.claim(ADDR, ""), Err(ClaimError::ReservoirFull));
     }
@@ -601,7 +590,13 @@ mod tests {
         let mut s = FaucetState::default();
         s.ledger.insert(
             ADDR.to_string(),
-            FaucetEntry { balance_pradha: 1000, last_claim_day: 0, total_claimed_pradha: 1000, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+            FaucetEntry {
+                balance_pradha: 1000,
+                last_claim_day: 0,
+                total_claimed_pradha: 1000,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
         assert!(s.check_withdraw(ADDR).is_ok());
         s.record_withdraw(ADDR, 100, 25).then_some(()).expect("record should succeed");
@@ -616,7 +611,13 @@ mod tests {
         let mut s = FaucetState::default();
         s.ledger.insert(
             ADDR.to_string(),
-            FaucetEntry { balance_pradha: u64::MAX >> 1, last_claim_day: 0, total_claimed_pradha: 0, last_claim_reward_pradha: 0, last_withdraw_secs: 0 },
+            FaucetEntry {
+                balance_pradha: u64::MAX >> 1,
+                last_claim_day: 0,
+                total_claimed_pradha: 0,
+                last_claim_reward_pradha: 0,
+                last_withdraw_secs: 0,
+            },
         );
         for _ in 0..(FAUCET_DAILY_FEE_BUDGET_PRADHA / 25) {
             s.record_withdraw(ADDR, 1, 25);
@@ -665,9 +666,7 @@ mod tests {
         s.last_day_claimants = 2_025_000_000;
         let cap = s.daily_cap_now();
         let r = s.reward_pradha_today();
-        let expected = (cap / 2_025_000_000)
-            .max(FAUCET_MIN_REWARD_PRADHA)
-            .min(FAUCET_MAX_REWARD_PRADHA);
+        let expected = (cap / 2_025_000_000).max(FAUCET_MIN_REWARD_PRADHA).min(FAUCET_MAX_REWARD_PRADHA);
         assert_eq!(r, expected, "reward harus proporsional: cap={cap}");
         assert!(r < FAUCET_MAX_REWARD_PRADHA);
         assert!(r >= FAUCET_MIN_REWARD_PRADHA);

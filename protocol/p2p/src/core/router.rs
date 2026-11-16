@@ -83,7 +83,9 @@ impl From<CeleniumdMessagePayloadType> for IncomingRouteOverflowPolicy {
     fn from(msg_type: CeleniumdMessagePayloadType) -> Self {
         match msg_type {
             // Inv messages are unique in the sense that no harm is done if some of them are dropped
-            CeleniumdMessagePayloadType::InvTransactions | CeleniumdMessagePayloadType::InvRelayBlock => IncomingRouteOverflowPolicy::Drop,
+            CeleniumdMessagePayloadType::InvTransactions | CeleniumdMessagePayloadType::InvRelayBlock => {
+                IncomingRouteOverflowPolicy::Drop
+            }
             _ => IncomingRouteOverflowPolicy::Disconnect,
         }
     }
@@ -424,7 +426,8 @@ impl Router {
         if err.can_send_outgoing_message() {
             // Send an explicit reject message for easier tracing of logical bugs causing protocol errors.
             // No need to handle errors since we are closing anyway
-            let _ = self.enqueue(make_message!(CeleniumdMessagePayload::Reject, RejectMessage { reason: err.to_reject_message() })).await;
+            let _ =
+                self.enqueue(make_message!(CeleniumdMessagePayload::Reject, RejectMessage { reason: err.to_reject_message() })).await;
         }
     }
 

@@ -77,11 +77,11 @@ use celenium_consensus_core::{
 };
 use celenium_consensus_notify::root::ConsensusNotificationRoot;
 
+use celenium_consensusmanager::{SessionLock, SessionReadGuard};
 use crossbeam_channel::{
     Receiver as CrossbeamReceiver, Sender as CrossbeamSender, bounded as bounded_crossbeam, unbounded as unbounded_crossbeam,
 };
 use itertools::Itertools;
-use celenium_consensusmanager::{SessionLock, SessionReadGuard};
 
 use celenium_core::info;
 #[cfg(feature = "test-smt-pruning-diagnostics")]

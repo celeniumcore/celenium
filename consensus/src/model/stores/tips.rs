@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use itertools::Itertools;
 use celenium_consensus_core::BlockHashSet;
 use celenium_consensus_core::BlockHasher;
 use celenium_database::prelude::CachedDbSetItem;
@@ -12,6 +11,7 @@ use celenium_database::prelude::StoreResultExt;
 use celenium_database::prelude::{BatchDbWriter, DirectDbWriter};
 use celenium_database::registry::DatabaseStorePrefixes;
 use celenium_hashes::Hash;
+use itertools::Itertools;
 use rocksdb::WriteBatch;
 
 /// Reader API for `TipsStore`.

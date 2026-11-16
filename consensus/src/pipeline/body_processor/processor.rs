@@ -22,7 +22,6 @@ use crate::{
     },
     processes::{coinbase::CoinbaseManager, transaction_validator::TransactionValidator},
 };
-use crossbeam_channel::{Receiver, Sender};
 use celenium_consensus_core::{
     KType,
     block::Block,
@@ -38,6 +37,7 @@ use celenium_consensus_notify::{
 use celenium_consensusmanager::SessionLock;
 use celenium_hashes::Hash;
 use celenium_notify::notifier::Notify;
+use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
 use rayon::ThreadPool;
 use rocksdb::WriteBatch;

@@ -2,11 +2,11 @@
 
 use crate::pskt::{KeySource, PartialSigs};
 use crate::utils::{Error as CombineMapErr, combine_if_no_conflicts};
-use derive_builder::Builder;
 use celenium_consensus_core::{
     hashing::sighash_type::{SIG_HASH_ALL, SigHashType},
     tx::{TransactionId, TransactionOutpoint, UtxoEntry},
 };
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, marker::PhantomData, ops::Add};
 

@@ -1,7 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use itertools::Itertools;
 use celenium_consensus_core::{
     muhash::MuHashExtensions,
     subnets::SUBNETWORK_ID_NATIVE,
@@ -10,6 +8,8 @@ use celenium_consensus_core::{
 use celenium_hashes::TransactionID;
 use celenium_muhash::MuHash;
 use celenium_utils::iter::parallelism_in_power_steps;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use itertools::Itertools;
 use rayon::prelude::*;
 
 fn generate_transaction(ins: usize, outs: usize, randomness: u64) -> SignableTransaction {

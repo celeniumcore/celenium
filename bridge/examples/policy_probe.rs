@@ -25,10 +25,7 @@ fn main() {
         );
     }
     println!("\ngenesis unix = {}", ep::GENESIS_TIMESTAMP_SECS);
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     // Snapshot dengan saldo reservoir 0 (kondisi awal/pengisian).
     let s = ep::snapshot(now, 0);
     println!(

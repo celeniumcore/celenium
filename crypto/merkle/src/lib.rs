@@ -61,8 +61,8 @@ fn cold_path_empty() -> Hash {
 mod tests {
     use super::*;
     use alloc::vec::Vec;
-    use core::iter;
     use celenium_hashes::{HasherBase, SeqCommitMerkleBranch, TransactionHash};
+    use core::iter;
     fn seq_comm_merkle_root(hashes: impl ExactSizeIterator<Item = Hash>) -> Hash {
         calc_merkle_root_with_hasher::<SeqCommitMerkleBranch>(hashes)
     }

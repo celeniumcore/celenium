@@ -1,5 +1,4 @@
 use crate::matrix::Matrix;
-use js_sys::BigInt;
 use celenium_consensus_client::Header;
 use celenium_consensus_client::HeaderT;
 use celenium_consensus_core::hashing;
@@ -8,6 +7,7 @@ use celenium_hashes::PowHash;
 use celenium_math::Uint256;
 use celenium_utils::hex::FromHex;
 use celenium_utils::hex::ToHex;
+use js_sys::BigInt;
 use num::Float;
 use wasm_bindgen::prelude::*;
 use workflow_wasm::convert::TryCastFromJs;

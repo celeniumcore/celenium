@@ -1,6 +1,6 @@
-use itertools::Itertools;
 use celenium_consensus_core::api::{ConsensusApi, DynConsensus};
 use celenium_core::{core::Core, debug, service::Service};
+use itertools::Itertools;
 use parking_lot::RwLock;
 use std::{collections::VecDeque, ops::Deref, sync::Arc, thread::JoinHandle};
 

@@ -14,14 +14,14 @@ use crate::{
         relations::{RelationsStoreExtensions, delete_reachability_relations, init as relations_init},
     },
 };
-use hashbrown::hash_map::Entry::{Occupied, Vacant};
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashMap, BlockHashSet,
     blockhash::{BlockHashExtensions, BlockHashes, ORIGIN},
 };
 use celenium_database::prelude::{DirectWriter, StoreError};
 use celenium_hashes::Hash;
+use hashbrown::hash_map::Entry::{Occupied, Vacant};
+use itertools::Itertools;
 use std::collections::VecDeque;
 use thiserror::Error;
 

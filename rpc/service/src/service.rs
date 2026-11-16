@@ -24,9 +24,9 @@ use celenium_consensus_notify::{
 use celenium_consensusmanager::ConsensusManager;
 use celenium_core::time::unix_now;
 use celenium_core::{
+    celeniumd_env::version,
     core::Core,
     debug,
-    celeniumd_env::version,
     signals::Shutdown,
     task::service::{AsyncService, AsyncServiceError, AsyncServiceFuture},
     task::tick::TickService,

@@ -9,10 +9,10 @@ use crate::{
         UtxosChangedMutationPolicy, context::SubscriptionContext,
     },
 };
-use itertools::Itertools;
 use celenium_addresses::{Address, Prefix};
 use celenium_consensus_core::tx::ScriptPublicKey;
 use celenium_core::trace;
+use itertools::Itertools;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::hash_set,

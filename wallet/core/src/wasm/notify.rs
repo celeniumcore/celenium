@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
-use cfg_if::cfg_if;
 use celenium_wallet_macros::declare_typescript_wasm_interface as declare;
+use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
 
 cfg_if! {

@@ -5,8 +5,8 @@ use crate::{
     data_stack::OpcodeData,
     opcodes::{OP_1_NEGATE_VAL, OP_DATA_MAX_VAL, OP_DATA_MIN_VAL, OP_SMALL_INT_MAX_VAL, OP_SMALL_INT_MIN_VAL, codes::*},
 };
-use hexplay::{HexView, HexViewBuilder};
 use celenium_txscript_errors::SerializationError;
+use hexplay::{HexView, HexViewBuilder};
 use thiserror::Error;
 
 /// DEFAULT_SCRIPT_ALLOC is the default size used for the backing array

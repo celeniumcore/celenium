@@ -1,8 +1,8 @@
 // Benchmarks are exempt from the arithmetic-side-effects lint.
 #![allow(clippy::arithmetic_side_effects)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use celenium_hashes::*;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use rand::{Rng, RngCore, thread_rng};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::{CShake256, CShake256Core};

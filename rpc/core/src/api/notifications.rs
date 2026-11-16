@@ -3,7 +3,6 @@
 //!
 
 use crate::model::message::*;
-use derive_more::Display;
 use celenium_notify::{
     events::EventType,
     notification::{Notification as NotificationTrait, full_featured},
@@ -13,6 +12,7 @@ use celenium_notify::{
         single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
     },
 };
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use wasm_bindgen::JsValue;

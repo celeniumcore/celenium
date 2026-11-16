@@ -6,7 +6,6 @@ use crate::{
     },
     tasks::{Stopper, TasksRunner, block::group::MinerGroupTask, daemon::DaemonTask, tx::group::TxSenderGroupTask},
 };
-use futures_util::future::join_all;
 use celenium_addresses::Address;
 use celenium_alloc::init_allocator_with_default_settings;
 use celenium_consensus::params::Params;
@@ -14,6 +13,7 @@ use celenium_consensus_core::network::NetworkType;
 use celenium_core::info;
 use celenium_rpc_core::api::rpc::RpcApi;
 use celenium_txscript::pay_to_address_script;
+use futures_util::future::join_all;
 use rand::Rng;
 use rand::thread_rng;
 use std::{
@@ -119,7 +119,10 @@ async fn bench_rpc_high_load() {
                 let hash = thread_virtual_chain.get(index).unwrap();
 
                 let start = Instant::now();
-                client.get_virtual_chain_from_block_v2(*hash, Some(celenium_rpc_core::RpcDataVerbosityLevel::High), None).await.unwrap();
+                client
+                    .get_virtual_chain_from_block_v2(*hash, Some(celenium_rpc_core::RpcDataVerbosityLevel::High), None)
+                    .await
+                    .unwrap();
 
                 latencies.push(start.elapsed());
             }

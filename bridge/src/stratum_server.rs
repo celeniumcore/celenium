@@ -1,8 +1,8 @@
 use crate::{
+    celeniumapi::CeleniumApi,
     client_handler::ClientHandler,
     default_client::{default_handlers, handle_authorize, handle_subscribe},
     jsonrpc_event::JsonRpcEvent,
-    celeniumapi::CeleniumApi,
     reservoir::ReservoirConfig,
     share_handler::{CeleniumApiTrait, ShareHandler},
     stratum_context::StratumContext,

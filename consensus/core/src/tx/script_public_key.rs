@@ -6,14 +6,14 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use borsh::{BorshDeserialize, BorshSerialize};
-use core::fmt::Formatter;
-use core::str::{self, FromStr};
-#[cfg(feature = "wasm32-sdk")]
-use js_sys::Object;
 use celenium_utils::{
     hex::{FromHex, ToHex},
     serde_bytes::FromHexVisitor,
 };
+use core::fmt::Formatter;
+use core::str::{self, FromStr};
+#[cfg(feature = "wasm32-sdk")]
+use js_sys::Object;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, Visitor},

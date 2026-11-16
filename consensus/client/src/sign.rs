@@ -3,8 +3,6 @@
 //!
 
 use crate::transaction::Transaction;
-use core::iter::once;
-use itertools::Itertools;
 use celenium_consensus_core::{
     hashing::{
         sighash::{SigHashReusedValuesUnsync, calc_schnorr_signature_hash},
@@ -13,6 +11,8 @@ use celenium_consensus_core::{
     tx::PopulatedTransaction,
     //sign::Signed,
 };
+use core::iter::once;
+use itertools::Itertools;
 use std::collections::BTreeMap;
 
 /// A wrapper enum that represents the transaction signed state. A transaction

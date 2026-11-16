@@ -1,4 +1,3 @@
-use derive_more::Display;
 use celenium_consensus_core::{acceptance_data::AcceptanceData, block::Block, utxo::utxo_diff::UtxoDiff};
 use celenium_hashes::Hash;
 use celenium_notify::{
@@ -11,6 +10,7 @@ use celenium_notify::{
         single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
     },
 };
+use derive_more::Display;
 use std::sync::Arc;
 
 full_featured! {

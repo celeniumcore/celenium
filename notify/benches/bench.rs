@@ -1,10 +1,10 @@
 // Benchmarks are exempt from the arithmetic-side-effects lint.
 #![allow(clippy::arithmetic_side_effects)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use celenium_addresses::{Address, Prefix};
 use celenium_math::Uint256;
 use celenium_notify::{address::tracker::Indexes, subscription::context::SubscriptionContext};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 fn create_addresses(count: usize) -> Vec<Address> {
     (0..count)

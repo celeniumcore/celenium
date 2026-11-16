@@ -4,11 +4,11 @@
 
 use crate::imports::{AccountId, AccountKind, AssocPrvKeyDataIds, PrvKeyDataId};
 use base64::DecodeError;
-use downcast::DowncastError;
 use celenium_bip32::Error as BIP32Error;
 use celenium_consensus_core::sign::Error as CoreSignError;
 use celenium_rpc_core::RpcError as CeleniumRpcError;
 use celenium_wrpc_client::error::Error as CeleniumWorkflowRpcError;
+use downcast::DowncastError;
 use std::sync::PoisonError;
 use thiserror::Error;
 use wasm_bindgen::JsValue;

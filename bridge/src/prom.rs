@@ -434,8 +434,7 @@ pub fn set_node_api(api: std::sync::Arc<crate::celeniumapi::CeleniumApi>) {
 
 /// Shared faucet ledger, set once during `main` startup so the dashboard can
 /// answer `GET /api/faucet/balance` and `POST /api/faucet/claim`.
-static FAUCET_STATE: OnceLock<std::sync::Arc<std::sync::Mutex<crate::faucet::FaucetState>>> =
-    OnceLock::new();
+static FAUCET_STATE: OnceLock<std::sync::Arc<std::sync::Mutex<crate::faucet::FaucetState>>> = OnceLock::new();
 
 /// Store the shared faucet ledger handle.
 pub fn set_faucet_state(state: std::sync::Arc<std::sync::Mutex<crate::faucet::FaucetState>>) {
@@ -682,8 +681,12 @@ async fn handle_http_request(
             HttpMode::Instance { web_bind, .. } => web_bind.clone(),
         };
 
-        let status =
-            WebStatusResponse { celeniumd_address: status_cfg.celeniumd_address, celeniumd_version, instances: status_cfg.instances, web_bind };
+        let status = WebStatusResponse {
+            celeniumd_address: status_cfg.celeniumd_address,
+            celeniumd_version,
+            instances: status_cfg.instances,
+            web_bind,
+        };
         let json = serde_json::to_string(&status).unwrap_or_else(|_| "{}".to_string());
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\n\r\n{}",
@@ -825,7 +828,8 @@ async fn handle_http_request(
                         "balancePradha": balance,
                         "totalClaimedPradha": total,
                         "canClaimToday": can_claim,
-                    }).to_string()
+                    })
+                    .to_string()
                 }
             },
             _ => r#"{"error":"missing address query parameter"}"#.to_string(),
@@ -863,7 +867,8 @@ async fn handle_http_request(
                             "address": address,
                             "balancePradha": entry.balance_pradha,
                             "rewardPradha": s.claim_reward_for(address),
-                        }).to_string(),
+                        })
+                        .to_string(),
                         Err(e) => serde_json::json!({ "error": e.to_string() }).to_string(),
                     }
                 }
@@ -1343,8 +1348,8 @@ fn config_write_allowed() -> bool {
 /// This avoids re-reading `config.yaml` from within the web/prom servers (which can be wrong when
 /// using `--config` / CLI overrides, and also breaks when the working directory differs).
 pub fn set_web_status_config(celeniumd_address: String, instances: usize) {
-    let lock =
-        WEB_STATUS_CONFIG.get_or_init(|| parking_lot::RwLock::new(WebStatusConfig { celeniumd_address: "-".to_string(), instances: 1 }));
+    let lock = WEB_STATUS_CONFIG
+        .get_or_init(|| parking_lot::RwLock::new(WebStatusConfig { celeniumd_address: "-".to_string(), instances: 1 }));
     *lock.write() = WebStatusConfig { celeniumd_address, instances: instances.max(1) };
 }
 

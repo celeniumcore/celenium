@@ -5,6 +5,10 @@ extern crate self as address_manager;
 use std::{collections::HashSet, iter, net::SocketAddr, sync::Arc, time::Duration};
 
 use address_manager::port_mapping_extender::Extender;
+use celenium_consensus_core::config::Config;
+use celenium_core::{debug, info, task::tick::TickService, time::unix_now, warn};
+use celenium_database::prelude::{CachePolicy, DB, StoreResultExt};
+use celenium_utils::networking::IpAddress;
 use igd_next::{
     self as igd, AddAnyPortError, AddPortError, Gateway, GetExternalIpError, GetGenericPortMappingEntryError, SearchError,
     aio::tokio::Tokio,
@@ -13,10 +17,6 @@ use itertools::{
     Either::{Left, Right},
     Itertools,
 };
-use celenium_consensus_core::config::Config;
-use celenium_core::{debug, info, task::tick::TickService, time::unix_now, warn};
-use celenium_database::prelude::{CachePolicy, DB, StoreResultExt};
-use celenium_utils::networking::IpAddress;
 use local_ip_address::list_afinet_netifas;
 use parking_lot::Mutex;
 use stores::banned_address_store::{BannedAddressesStore, BannedAddressesStoreReader, ConnectionBanTimestamp, DbBannedAddressesStore};
@@ -346,9 +346,9 @@ mod address_store_with_cache {
         sync::Arc,
     };
 
-    use itertools::Itertools;
     use celenium_database::prelude::{CachePolicy, DB};
     use celenium_utils::networking::PrefixBucket;
+    use itertools::Itertools;
     use rand::{
         distributions::{WeightedError, WeightedIndex},
         prelude::Distribution,

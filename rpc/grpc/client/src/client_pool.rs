@@ -1,9 +1,9 @@
 use super::GrpcClient;
 use async_channel::{SendError, Sender};
-use futures_util::Future;
-use itertools::Itertools;
 use celenium_core::trace;
 use celenium_utils::{any::type_name_short, channel::Channel, triggers::SingleTrigger};
+use futures_util::Future;
+use itertools::Itertools;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

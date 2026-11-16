@@ -1,7 +1,7 @@
 use crate::{
+    celeniumapi::NODE_STATUS,
     errors::*,
     jsonrpc_event::{JsonRpcEvent, JsonRpcResponse},
-    celeniumapi::NODE_STATUS,
     log_colors::LogColors,
     mining_state::GetMiningState,
     pplns::PplnsTracker,
@@ -774,11 +774,8 @@ impl ShareHandler {
                 let block = Block::from_arcs(Arc::new(header_clone), Arc::new(transactions_vec));
                 let blue_score = block.header.blue_score;
                 // Total subsidi blok = jumlah output coinbase (subsidy + fees), dalam pradha.
-                let coinbase_pradha = block
-                    .transactions
-                    .first()
-                    .map(|tx| tx.outputs.iter().map(|o| o.value).sum::<u64>())
-                    .unwrap_or(0);
+                let coinbase_pradha =
+                    block.transactions.first().map(|tx| tx.outputs.iter().map(|o| o.value).sum::<u64>()).unwrap_or(0);
 
                 // Calculate block hash immediately after block creation
                 // Use celenium_consensus_core::hashing::header::hash() for block hash calculation
@@ -905,10 +902,7 @@ impl ShareHandler {
                                         let mut faucet_cut_pradha = 0u64;
                                         let faucet_addr = faucet_address.lock().clone();
                                         if let Some(addr) = faucet_addr {
-                                            let balance = match celenium_api
-                                                .get_balances_by_addresses(&[addr.clone()])
-                                                .await
-                                            {
+                                            let balance = match celenium_api.get_balances_by_addresses(&[addr.clone()]).await {
                                                 Ok(v) => v.first().map(|(_, b)| *b).unwrap_or(0),
                                                 Err(_) => 0,
                                             };

@@ -69,15 +69,10 @@ async fn run() -> Result<(), String> {
     println!("difficulty      : {}", dag.difficulty);
     println!("pruning point   : {}", dag.pruning_point_hash);
 
-    let parsed: Vec<Address> = addrs
-        .iter()
-        .map(|s| Address::try_from(s.as_str()).map_err(|e| format!("bad address {s}: {e}")))
-        .collect::<Result<_, _>>()?;
+    let parsed: Vec<Address> =
+        addrs.iter().map(|s| Address::try_from(s.as_str()).map_err(|e| format!("bad address {s}: {e}"))).collect::<Result<_, _>>()?;
 
-    let balances = client
-        .get_balances_by_addresses(parsed.clone())
-        .await
-        .map_err(|e| format!("get_balances_by_addresses: {e}"))?;
+    let balances = client.get_balances_by_addresses(parsed.clone()).await.map_err(|e| format!("get_balances_by_addresses: {e}"))?;
 
     println!();
     println!("--- balances ({} address) ---", balances.len());
@@ -88,10 +83,7 @@ async fn run() -> Result<(), String> {
 
     // UTXO detail per address
     for a in &parsed {
-        let utxos = client
-            .get_utxos_by_addresses(vec![a.clone()])
-            .await
-            .map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
+        let utxos = client.get_utxos_by_addresses(vec![a.clone()]).await.map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
         println!();
         println!("--- {} ({} utxo) ---", a, utxos.len());
         for u in &utxos {

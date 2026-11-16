@@ -235,9 +235,7 @@ pub fn spawn_internal_cpu_miner(
                     // hashrate, but the thread lives on and resumes the moment
                     // mining is switched back on. Shutdown stays checked so a
                     // Ctrl+C still exits promptly.
-                    while !crate::prom::INTERNAL_MINER_ENABLED.load(Ordering::Acquire)
-                        && !shutdown_flag.load(Ordering::Acquire)
-                    {
+                    while !crate::prom::INTERNAL_MINER_ENABLED.load(Ordering::Acquire) && !shutdown_flag.load(Ordering::Acquire) {
                         std::thread::sleep(Duration::from_millis(100));
                     }
                     if shutdown_flag.load(Ordering::Acquire) {

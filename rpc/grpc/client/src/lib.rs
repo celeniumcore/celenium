@@ -4,15 +4,12 @@ use self::{
 };
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
-pub use client_pool::ClientPool;
-use connection_event::ConnectionEvent;
-use futures::{future::FutureExt, pin_mut, select};
 use celenium_core::{debug, error, trace};
 use celenium_grpc_core::{
     RPC_MAX_MESSAGE_SIZE,
     channel::NotificationChannel,
     ops::CeleniumdPayloadOps,
-    protowire::{GetInfoRequestMessage, CeleniumdRequest, CeleniumdResponse, celeniumd_request, rpc_client::RpcClient},
+    protowire::{CeleniumdRequest, CeleniumdResponse, GetInfoRequestMessage, celeniumd_request, rpc_client::RpcClient},
 };
 use celenium_notify::{
     collector::{Collector, CollectorFrom},
@@ -40,6 +37,9 @@ use celenium_utils_tower::{
     counters::TowerConnectionCounters,
     middleware::{CountBytesBody, MapRequestBodyLayer, MapResponseBodyLayer, ServiceBuilder},
 };
+pub use client_pool::ClientPool;
+use connection_event::ConnectionEvent;
+use futures::{future::FutureExt, pin_mut, select};
 use regex::Regex;
 use std::{
     sync::{

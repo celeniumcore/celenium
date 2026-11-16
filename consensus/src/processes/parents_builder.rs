@@ -1,11 +1,11 @@
-use indexmap::{IndexMap, IndexSet};
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHasher, BlockLevel,
     blockhash::ORIGIN,
     header::{CompressedParents, Header},
 };
 use celenium_hashes::Hash;
+use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use smallvec::{SmallVec, smallvec};
 use std::sync::Arc;
 
@@ -212,7 +212,6 @@ mod tests {
     };
 
     use super::ParentsManager;
-    use itertools::Itertools;
     use celenium_consensus_core::{
         BlockHashMap, BlockHashSet, HashMapCustomHasher,
         blockhash::{BlockHashes, ORIGIN},
@@ -220,6 +219,7 @@ mod tests {
     };
     use celenium_database::prelude::{ReadLock, StoreError, StoreResult};
     use celenium_hashes::Hash;
+    use itertools::Itertools;
     use parking_lot::RwLock;
 
     struct HeaderStoreMock {

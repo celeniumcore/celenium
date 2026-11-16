@@ -4,8 +4,8 @@ use crate::{
     scope::{Scope, UtxosChangedScope, VirtualChainChangedScope},
     subscription::{Command, Compounded, Mutation, Subscription, context::SubscriptionContext},
 };
-use itertools::Itertools;
 use celenium_addresses::{Address, Prefix};
+use itertools::Itertools;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OverallSubscription {

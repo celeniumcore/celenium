@@ -11,15 +11,15 @@ mod pow_hashers;
 
 use alloc::string::String;
 use borsh::{BorshDeserialize, BorshSerialize};
+use celenium_utils::{
+    hex::{FromHex, ToHex},
+    serde_impl_deser_fixed_bytes_ref, serde_impl_ser_fixed_bytes_ref,
+};
 use core::{
     array::TryFromSliceError,
     fmt::{Debug, Display, Formatter},
     hash::{Hash as CoreHash, Hasher as CoreHasher},
     str::{self, FromStr},
-};
-use celenium_utils::{
-    hex::{FromHex, ToHex},
-    serde_impl_deser_fixed_bytes_ref, serde_impl_ser_fixed_bytes_ref,
 };
 use wasm_bindgen::prelude::*;
 

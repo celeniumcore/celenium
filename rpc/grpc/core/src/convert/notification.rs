@@ -1,5 +1,6 @@
 use crate::protowire::{
-    BlockAddedNotificationMessage, CeleniumdResponse, NewBlockTemplateNotificationMessage, RpcNotifyCommand, celeniumd_response::Payload,
+    BlockAddedNotificationMessage, CeleniumdResponse, NewBlockTemplateNotificationMessage, RpcNotifyCommand,
+    celeniumd_response::Payload,
 };
 use crate::protowire::{
     FinalityConflictNotificationMessage, FinalityConflictResolvedNotificationMessage, NotifyPruningPointUtxoSetOverrideRequestMessage,

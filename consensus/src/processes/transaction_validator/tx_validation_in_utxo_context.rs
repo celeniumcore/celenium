@@ -226,8 +226,6 @@ mod tests {
     use super::super::errors::TxRuleError;
     use super::{CHECK_SCRIPTS_PARALLELISM_THRESHOLD, TxValidationFlags, check_scripts};
     use crate::{params::MAINNET_PARAMS, processes::transaction_validator::TransactionValidator};
-    use core::str::FromStr;
-    use itertools::Itertools;
     use celenium_consensus_core::mass::{ComputeBudget, free_script_units_per_input};
     use celenium_consensus_core::mass::{GRAMS_PER_COMPUTE_BUDGET_UNIT, MassCalculator, SCRIPT_UNITS_PER_COMPUTE_BUDGET_UNIT};
     use celenium_consensus_core::sign::sign;
@@ -245,6 +243,8 @@ mod tests {
         standard::{pay_to_script_hash_script, pay_to_script_hash_signature_script},
     };
     use celenium_txscript_errors::TxScriptError;
+    use core::str::FromStr;
+    use itertools::Itertools;
     use secp256k1::Secp256k1;
     use smallvec::SmallVec;
     use std::iter::once;

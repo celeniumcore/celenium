@@ -21,7 +21,6 @@ use crate::{
         tx_query::TransactionQuery,
     },
 };
-use itertools::Itertools;
 use celenium_consensus_core::{
     api::{
         ConsensusApi,
@@ -36,6 +35,7 @@ use celenium_consensus_core::{
 use celenium_consensusmanager::{ConsensusProxy, spawn_blocking};
 use celenium_core::{debug, error, info, time::Stopwatch, warn};
 use celenium_mining_errors::{manager::MiningManagerError, mempool::RuleError};
+use itertools::Itertools;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;

@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
-use chrono::{Local, LocalResult, TimeZone};
 use celenium_core::info;
+use chrono::{Local, LocalResult, TimeZone};
 
 /// Minimum number of items to report
 const REPORT_BATCH_GRANULARITY: usize = 500;

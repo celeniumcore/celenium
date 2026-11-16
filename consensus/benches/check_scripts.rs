@@ -1,6 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
 
-use criterion::{Criterion, SamplingMode, black_box, criterion_group, criterion_main};
 use celenium_addresses::{Address, Prefix, Version};
 use celenium_consensus::processes::transaction_validator::tx_validation_in_utxo_context::{
     check_scripts_par_iter, check_scripts_par_iter_pool, check_scripts_sequential,
@@ -12,6 +11,7 @@ use celenium_consensus_core::tx::{ComputeCommit, MutableTransaction, Transaction
 use celenium_txscript::caches::Cache;
 use celenium_txscript::{EngineCtx, pay_to_address_script};
 use celenium_utils::iter::parallelism_in_power_steps;
+use criterion::{Criterion, SamplingMode, black_box, criterion_group, criterion_main};
 use rand::{Rng, thread_rng};
 use secp256k1::Keypair;
 

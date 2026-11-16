@@ -265,10 +265,10 @@ mod tests {
         },
         processes::reachability::{interval::Interval, tests::r#gen::generate_complex_dag},
     };
-    use itertools::Itertools;
     use celenium_consensus_core::blockhash::ORIGIN;
     use celenium_database::prelude::ConnBuilder;
     use celenium_database::{create_temp_db, prelude::CachePolicy};
+    use itertools::Itertools;
     use parking_lot::RwLock;
     use rand::seq::IteratorRandom;
     use rocksdb::WriteBatch;

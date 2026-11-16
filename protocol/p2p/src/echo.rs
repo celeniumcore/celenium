@@ -1,5 +1,5 @@
 use crate::{
-    IncomingRoute, CeleniumdMessagePayloadType, Router,
+    CeleniumdMessagePayloadType, IncomingRoute, Router,
     common::ProtocolError,
     core::adaptor::ConnectionInitializer,
     handshake::CeleniumdHandshake,

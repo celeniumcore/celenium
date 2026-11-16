@@ -5,7 +5,6 @@ use crate::core::model::{
 use crate::errors::{UtxoIndexError, UtxoIndexResult};
 use zerocopy::big_endian::U64 as BigEndianU64;
 
-use itertools::Itertools;
 use celenium_consensus_core::tx::{
     ScriptPublicKey, ScriptPublicKeyVersion, ScriptPublicKeys, ScriptVec, TransactionIndexType, TransactionOutpoint,
 };
@@ -13,6 +12,7 @@ use celenium_core::debug;
 use celenium_database::prelude::{CachePolicy, CachedDbAccess, DB, DirectDbWriter, StoreResult};
 use celenium_database::registry::DatabaseStorePrefixes;
 use celenium_hashes::Hash;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Display;

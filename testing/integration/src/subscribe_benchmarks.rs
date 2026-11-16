@@ -16,7 +16,6 @@ use crate::{
         tx::group::TxSenderGroupTask,
     },
 };
-use itertools::Itertools;
 use celenium_addresses::Address;
 use celenium_alloc::init_allocator_with_default_settings;
 use celenium_consensus::params::Params;
@@ -26,6 +25,7 @@ use celenium_math::Uint256;
 use celenium_notify::scope::VirtualDaaScoreChangedScope;
 use celenium_rpc_core::api::rpc::RpcApi;
 use celenium_txscript::pay_to_address_script;
+use itertools::Itertools;
 use rand::thread_rng;
 use std::{sync::Arc, time::Duration};
 

@@ -6,11 +6,11 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use itertools::chain;
 use celenium_addresses::Address;
 use celenium_consensus_core::network::NetworkId;
 use celenium_core::debug;
 use celenium_utils::triggers::SingleTrigger;
+use itertools::chain;
 use rand::thread_rng;
 use std::sync::Arc;
 use tokio::task::JoinHandle;

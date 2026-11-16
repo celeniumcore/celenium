@@ -1,9 +1,6 @@
 #![allow(clippy::arithmetic_side_effects)]
 use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
-use clap::{Arg, ArgAction, Command};
-use gas::GasDistribution;
-use itertools::Itertools;
 use celenium_addresses::{Address, Prefix, Version};
 use celenium_consensus_core::{
     config::params::TESTNET_PARAMS,
@@ -17,11 +14,14 @@ use celenium_consensus_core::{
         UtxoEntry,
     },
 };
-use celenium_core::{info, celeniumd_env::version, time::unix_now, warn};
+use celenium_core::{celeniumd_env::version, info, time::unix_now, warn};
 use celenium_grpc_client::{ClientPool, GrpcClient};
 use celenium_notify::subscription::context::SubscriptionContext;
 use celenium_rpc_core::{RpcUtxoEntry, api::rpc::RpcApi, notify::mode::NotificationMode};
 use celenium_txscript::pay_to_address_script;
+use clap::{Arg, ArgAction, Command};
+use gas::GasDistribution;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use rand::RngCore;
 use rayon::prelude::*;
@@ -278,7 +278,8 @@ async fn main() {
 
     let celenium_addr = Address::new(address_prefix, ADDRESS_VERSION, &schnorr_key.x_only_public_key().0.serialize());
 
-    let celenium_to_addr = args.addr.as_ref().map_or_else(|| celenium_addr.clone(), |addr_str| Address::try_from(addr_str.clone()).unwrap());
+    let celenium_to_addr =
+        args.addr.as_ref().map_or_else(|| celenium_addr.clone(), |addr_str| Address::try_from(addr_str.clone()).unwrap());
 
     (args.payload_size <= 20000).then_some(()).expect("payload-size can be max 20000");
     assert!(args.lps <= args.tps || args.lps == 0, "lps ({}) must be less than tps ({})", args.lps, args.tps);

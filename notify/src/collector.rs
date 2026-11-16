@@ -2,9 +2,9 @@ use super::{error::Result, notification::Notification};
 use crate::{converter::Converter, notifier::DynNotify};
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
-use core::fmt::Debug;
 use celenium_core::{debug, trace};
 use celenium_utils::{channel::Channel, triggers::SingleTrigger};
+use core::fmt::Debug;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},

@@ -8,9 +8,9 @@ use celenium_addresses::{Address, Prefix};
 use celenium_consensus_core::network::{NetworkId, NetworkType};
 use celenium_consensus_core::tx::{ScriptPublicKey, TransactionOutpoint, UtxoEntry};
 
-use hex;
 use celenium_consensus_core::constants::UNACCEPTED_DAA_SCORE;
 use celenium_txscript::{extract_script_pub_key_address, pay_to_address_script, pay_to_script_hash_script};
+use hex;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 

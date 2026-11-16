@@ -1,4 +1,3 @@
-use clap::{Arg, ArgAction, Command, arg};
 use celenium_consensus_core::{
     config::Config,
     network::{NetworkId, NetworkType},
@@ -8,6 +7,7 @@ use celenium_notify::address::tracker::Tracker;
 use celenium_p2p_flows::user_agent_rule::UserAgentRule;
 use celenium_utils::networking::ContextualNetAddress;
 use celenium_wrpc_server::address::WrpcNetAddress;
+use clap::{Arg, ArgAction, Command, arg};
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
 use std::{ffi::OsString, fs};
@@ -75,9 +75,9 @@ pub struct Args {
     pub perf_metrics_interval_sec: u64,
     pub block_template_cache_lifetime: Option<u64>,
 
-        pub num_prealloc_utxos: Option<u64>,
-        pub prealloc_address: Option<String>,
-        pub prealloc_amount: u64,
+    pub num_prealloc_utxos: Option<u64>,
+    pub prealloc_address: Option<String>,
+    pub prealloc_amount: u64,
 
     pub disable_upnp: bool,
     #[serde(rename = "nodnsseed")]
@@ -132,9 +132,9 @@ impl Default for Args {
             externalip: None,
             block_template_cache_lifetime: None,
 
-                        num_prealloc_utxos: None,
-                        prealloc_address: None,
-                        prealloc_amount: 10_000_000_000,
+            num_prealloc_utxos: None,
+            prealloc_address: None,
+            prealloc_amount: 10_000_000_000,
 
             disable_upnp: false,
             disable_dns_seeding: false,
@@ -167,12 +167,12 @@ impl Args {
         config.ram_scale = self.ram_scale;
         config.retention_period_days = self.retention_period_days;
 
-                if let Some(num_prealloc_utxos) = self.num_prealloc_utxos {
+        if let Some(num_prealloc_utxos) = self.num_prealloc_utxos {
             config.initial_utxo_set = Arc::new(self.generate_prealloc_utxos(num_prealloc_utxos));
         }
     }
 
-        pub fn generate_prealloc_utxos(&self, num_prealloc_utxos: u64) -> celenium_consensus_core::utxo::utxo_collection::UtxoCollection {
+    pub fn generate_prealloc_utxos(&self, num_prealloc_utxos: u64) -> celenium_consensus_core::utxo::utxo_collection::UtxoCollection {
         let addr = Address::try_from(&self.prealloc_address.as_ref().unwrap()[..]).unwrap();
         let spk = pay_to_address_script(&addr);
         (1..=num_prealloc_utxos)
@@ -451,7 +451,7 @@ a large RAM (~64GB) can set this value to ~3.0-4.0 and gain superior performance
         )
         ;
 
-        let cmd = cmd
+    let cmd = cmd
         .arg(Arg::new("num-prealloc-utxos").long("num-prealloc-utxos").require_equals(true).value_parser(clap::value_parser!(u64)))
         .arg(Arg::new("prealloc-address").long("prealloc-address").require_equals(true).value_parser(clap::value_parser!(String)))
         .arg(Arg::new("prealloc-amount").long("prealloc-amount").require_equals(true).value_parser(clap::value_parser!(u64)));
@@ -530,9 +530,9 @@ impl Args {
             ram_scale: arg_match_unwrap_or::<f64>(&m, "ram-scale", defaults.ram_scale),
             retention_period_days: m.get_one::<f64>("retention-period-days").cloned().or(defaults.retention_period_days),
 
-                        num_prealloc_utxos: m.get_one::<u64>("num-prealloc-utxos").cloned(),
-                        prealloc_address: m.get_one::<String>("prealloc-address").cloned(),
-                        prealloc_amount: arg_match_unwrap_or::<u64>(&m, "prealloc-amount", defaults.prealloc_amount),
+            num_prealloc_utxos: m.get_one::<u64>("num-prealloc-utxos").cloned(),
+            prealloc_address: m.get_one::<String>("prealloc-address").cloned(),
+            prealloc_amount: arg_match_unwrap_or::<u64>(&m, "prealloc-amount", defaults.prealloc_amount),
             override_params_file: m.get_one::<String>("override-params-file").cloned(),
             rocksdb_preset: m.get_one::<String>("rocksdb-preset").cloned().or(defaults.rocksdb_preset),
             rocksdb_wal_dir: m.get_one::<String>("rocksdb-wal-dir").cloned().or(defaults.rocksdb_wal_dir),
@@ -577,7 +577,8 @@ mod tests {
 
     #[test]
     fn parses_ua_rules() {
-        let args = Args::parse(["celeniumd", r"--ua-rule=allow;regex:(^|/)celeniumd:", r"--ua-rule=reject;ver:celeniumd<1.1.1"]).unwrap();
+        let args =
+            Args::parse(["celeniumd", r"--ua-rule=allow;regex:(^|/)celeniumd:", r"--ua-rule=reject;ver:celeniumd<1.1.1"]).unwrap();
 
         assert_eq!(args.ua_rule, vec![r"allow;regex:(^|/)celeniumd:", r"reject;ver:celeniumd<1.1.1"]);
     }

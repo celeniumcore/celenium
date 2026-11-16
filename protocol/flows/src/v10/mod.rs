@@ -137,8 +137,10 @@ pub(crate) fn register_flows(ctx: FlowContext, router: Arc<Router>, use_ibd_chun
         Box::new(RelayTransactionsFlow::new(
             ctx.clone(),
             router.clone(),
-            router
-                .subscribe_with_capacity(vec![CeleniumdMessagePayloadType::InvTransactions], RelayTransactionsFlow::invs_channel_size()),
+            router.subscribe_with_capacity(
+                vec![CeleniumdMessagePayloadType::InvTransactions],
+                RelayTransactionsFlow::invs_channel_size(),
+            ),
             router.subscribe_with_capacity(
                 vec![CeleniumdMessagePayloadType::Transaction, CeleniumdMessagePayloadType::TransactionNotFound],
                 RelayTransactionsFlow::txs_channel_size(),
@@ -149,7 +151,11 @@ pub(crate) fn register_flows(ctx: FlowContext, router: Arc<Router>, use_ibd_chun
             router.clone(),
             router.subscribe(vec![CeleniumdMessagePayloadType::RequestTransactions]),
         )),
-        Box::new(ReceiveAddressesFlow::new(ctx.clone(), router.clone(), router.subscribe(vec![CeleniumdMessagePayloadType::Addresses]))),
+        Box::new(ReceiveAddressesFlow::new(
+            ctx.clone(),
+            router.clone(),
+            router.subscribe(vec![CeleniumdMessagePayloadType::Addresses]),
+        )),
         Box::new(SendAddressesFlow::new(
             ctx.clone(),
             router.clone(),

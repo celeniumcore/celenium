@@ -14,10 +14,10 @@
 use alloc::format;
 use alloc::string::{String, ToString};
 use borsh::{BorshDeserialize, BorshSerialize};
+use celenium_addresses::Prefix;
 use core::fmt::{Debug, Display, Formatter};
 use core::ops::Deref;
 use core::str::FromStr;
-use celenium_addresses::Prefix;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 #[cfg(feature = "wasm32-sdk")]
 use wasm_bindgen::convert::TryFromJsValue;

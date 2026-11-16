@@ -442,7 +442,8 @@ where
     let mut values = head.to_vec();
     values.extend(tail);
 
-    let utxo_entries: Vec<UtxoEntryReference> = values.into_iter().map(celenium_to_pradha).map(UtxoEntryReference::simulated).collect();
+    let utxo_entries: Vec<UtxoEntryReference> =
+        values.into_iter().map(celenium_to_pradha).map(UtxoEntryReference::simulated).collect();
     let multiplexer = None;
     let minimum_signatures = 1;
     let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
@@ -475,7 +476,9 @@ where
 pub(crate) fn change_address(network_type: NetworkType) -> Address {
     match network_type {
         NetworkType::Mainnet => Address::try_from("celenium:qpauqsvk7yf9unexwmxsnmg547mhyga37csh0kj53q6xxgl24ydxjsgzthw5j").unwrap(),
-        NetworkType::Testnet => Address::try_from("celeniumtest:qqz22l98sf8jun72rwh5rqe2tm8lhwtdxdmynrz4ypwak427qed5juktjt7ju").unwrap(),
+        NetworkType::Testnet => {
+            Address::try_from("celeniumtest:qqz22l98sf8jun72rwh5rqe2tm8lhwtdxdmynrz4ypwak427qed5juktjt7ju").unwrap()
+        }
         _ => unreachable!("network type not supported"),
     }
 }
@@ -483,7 +486,9 @@ pub(crate) fn change_address(network_type: NetworkType) -> Address {
 pub(crate) fn output_address(network_type: NetworkType) -> Address {
     match network_type {
         NetworkType::Mainnet => Address::try_from("celenium:qrd9efkvg3pg34sgp6ztwyv3r569qlc43wa5w8nfs302532dzj47knu04aftm").unwrap(),
-        NetworkType::Testnet => Address::try_from("celeniumtest:qqrewmx4gpuekvk8grenkvj2hp7xt0c35rxgq383f6gy223c4ud5s58ptm6er").unwrap(),
+        NetworkType::Testnet => {
+            Address::try_from("celeniumtest:qqrewmx4gpuekvk8grenkvj2hp7xt0c35rxgq383f6gy223c4ud5s58ptm6er").unwrap()
+        }
         _ => unreachable!("network type not supported"),
     }
 }
@@ -582,8 +587,14 @@ fn test_generator_storage_mass_does_not_increase_base_fee() -> Result<()> {
     let mut generated = Vec::new();
 
     for output_value in [5.0, 1.0] {
-        let generator =
-            generator(network_id, &[10.0], &[], None, Fees::sender(Celenium(0.0)), [(output_address, Celenium(output_value))].as_slice())?;
+        let generator = generator(
+            network_id,
+            &[10.0],
+            &[],
+            None,
+            Fees::sender(Celenium(0.0)),
+            [(output_address, Celenium(output_value))].as_slice(),
+        )?;
         let pt = generator.generate_transaction()?.expect("one final transaction");
         assert!(pt.is_final());
         assert_eq!(pt.transaction().outputs.len(), 2, "both cases should retain a change output");
@@ -725,32 +736,39 @@ fn test_generator_inputs_2_outputs_2_fees_exclude() -> Result<()> {
 #[test]
 fn test_generator_inputs_500_outputs_1_fees_exclude_success() -> Result<()> {
     // generator(test_network_id(), &[10.0; 500], &[], Fees::sender(Celenium(5.0)), [(output_address, Celenium(4990.0))].as_slice())
-    generator(test_network_id(), &[10.0; 500], &[], None, Fees::sender(Celenium(0.0)), [(output_address, Celenium(4990.0))].as_slice())
-        .unwrap()
-        .harness()
-        .fetch(&Expected {
-            is_final: false,
-            input_count: 446,
-            aggregate_input_value: Celenium(4460.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
-        .fetch(&Expected {
-            is_final: false,
-            input_count: 54,
-            aggregate_input_value: Celenium(540.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
-        .fetch(&Expected {
-            is_final: true,
-            input_count: 2,
-            aggregate_input_value: Pradha(499943978800),
-            output_count: 2,
-            // priority_fees: FeesExpected::sender(Celenium(5.0)),
-            priority_fees: FeesExpected::sender(Celenium(0.0)),
-        })
-        .finalize();
+    generator(
+        test_network_id(),
+        &[10.0; 500],
+        &[],
+        None,
+        Fees::sender(Celenium(0.0)),
+        [(output_address, Celenium(4990.0))].as_slice(),
+    )
+    .unwrap()
+    .harness()
+    .fetch(&Expected {
+        is_final: false,
+        input_count: 446,
+        aggregate_input_value: Celenium(4460.0),
+        output_count: 1,
+        priority_fees: FeesExpected::None,
+    })
+    .fetch(&Expected {
+        is_final: false,
+        input_count: 54,
+        aggregate_input_value: Celenium(540.0),
+        output_count: 1,
+        priority_fees: FeesExpected::None,
+    })
+    .fetch(&Expected {
+        is_final: true,
+        input_count: 2,
+        aggregate_input_value: Pradha(499943978800),
+        output_count: 2,
+        // priority_fees: FeesExpected::sender(Celenium(5.0)),
+        priority_fees: FeesExpected::sender(Celenium(0.0)),
+    })
+    .finalize();
 
     Ok(())
 }
@@ -796,51 +814,65 @@ fn test_generator_inputs_500_outputs_1_fees_include_success() -> Result<()> {
 
 #[test]
 fn test_generator_inputs_500_outputs_1_fees_exclude_insufficient_funds() -> Result<()> {
-    generator(test_network_id(), &[10.0; 500], &[], None, Fees::sender(Celenium(5.0)), [(output_address, Celenium(5000.0))].as_slice())
-        .unwrap()
-        .harness()
-        .fetch(&Expected {
-            is_final: false,
-            input_count: 446,
-            aggregate_input_value: Celenium(4460.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
-        .insufficient_funds();
+    generator(
+        test_network_id(),
+        &[10.0; 500],
+        &[],
+        None,
+        Fees::sender(Celenium(5.0)),
+        [(output_address, Celenium(5000.0))].as_slice(),
+    )
+    .unwrap()
+    .harness()
+    .fetch(&Expected {
+        is_final: false,
+        input_count: 446,
+        aggregate_input_value: Celenium(4460.0),
+        output_count: 1,
+        priority_fees: FeesExpected::None,
+    })
+    .insufficient_funds();
 
     Ok(())
 }
 
 #[test]
 fn test_generator_inputs_1k_outputs_2_fees_exclude() -> Result<()> {
-    generator(test_network_id(), &[10.0; 1_000], &[], None, Fees::sender(Celenium(5.0)), [(output_address, Celenium(9_000.0))].as_slice())
-        .unwrap()
-        .harness()
-        .drain(
-            2,
-            &Expected {
-                is_final: false,
-                input_count: 446,
-                aggregate_input_value: Celenium(4460.0),
-                output_count: 1,
-                priority_fees: FeesExpected::None,
-            },
-        )
-        .fetch(&Expected {
+    generator(
+        test_network_id(),
+        &[10.0; 1_000],
+        &[],
+        None,
+        Fees::sender(Celenium(5.0)),
+        [(output_address, Celenium(9_000.0))].as_slice(),
+    )
+    .unwrap()
+    .harness()
+    .drain(
+        2,
+        &Expected {
             is_final: false,
-            input_count: 9,
-            aggregate_input_value: Celenium(90.0),
+            input_count: 446,
+            aggregate_input_value: Celenium(4460.0),
             output_count: 1,
             priority_fees: FeesExpected::None,
-        })
-        .fetch(&Expected {
-            is_final: true,
-            input_count: 3,
-            aggregate_input_value: Pradha(900899086400),
-            output_count: 2,
-            priority_fees: FeesExpected::receiver(Celenium(5.0)),
-        })
-        .finalize();
+        },
+    )
+    .fetch(&Expected {
+        is_final: false,
+        input_count: 9,
+        aggregate_input_value: Celenium(90.0),
+        output_count: 1,
+        priority_fees: FeesExpected::None,
+    })
+    .fetch(&Expected {
+        is_final: true,
+        input_count: 3,
+        aggregate_input_value: Pradha(900899086400),
+        output_count: 2,
+        priority_fees: FeesExpected::receiver(Celenium(5.0)),
+    })
+    .finalize();
 
     Ok(())
 }

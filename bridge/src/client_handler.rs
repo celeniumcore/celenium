@@ -33,7 +33,7 @@ pub struct ClientHandler {
     last_template_time: Arc<Mutex<Instant>>,
     last_balance_check: Arc<Mutex<Instant>>,
     share_handler: Arc<ShareHandler>,
-    instance_id: String, // Instance identifier for logging
+    instance_id: String,          // Instance identifier for logging
     pool_address: Option<String>, // Pool mode: coinbase ke alamat pool (None = solo)
 }
 

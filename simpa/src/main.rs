@@ -1,8 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
 use async_channel::unbounded;
-use clap::Parser;
-use futures::{Future, future::try_join_all};
-use itertools::Itertools;
 use celenium_alloc::init_allocator_with_default_settings;
 use celenium_consensus::{
     config::ConfigBuilder,
@@ -32,6 +29,9 @@ use celenium_database::{create_temp_db, load_existing_db};
 use celenium_hashes::Hash;
 use celenium_perf_monitor::{builder::Builder, counters::CountersSnapshot};
 use celenium_utils::fd_budget;
+use clap::Parser;
+use futures::{Future, future::try_join_all};
+use itertools::Itertools;
 use simpa::simulator::network::CeleniumNetworkSimulator;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 

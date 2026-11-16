@@ -1,7 +1,6 @@
 mod utxo_set_override_inner {
     use std::sync::Arc;
 
-    use itertools::Itertools;
     use celenium_consensus_core::{
         api::ConsensusApi,
         config::{Config, genesis::GenesisBlock},
@@ -12,6 +11,7 @@ mod utxo_set_override_inner {
     };
     use celenium_hashes::Hash;
     use celenium_muhash::MuHash;
+    use itertools::Itertools;
 
     use crate::consensus::Consensus;
 

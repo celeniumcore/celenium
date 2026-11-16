@@ -79,9 +79,9 @@ pub mod test_helpers {
     use crate::subscription::{Subscription, context::SubscriptionContext};
 
     use super::*;
-    use derive_more::Display;
     use celenium_addresses::Address;
     use celenium_core::trace;
+    use derive_more::Display;
     use std::sync::Arc;
 
     #[derive(Clone, Debug, Default, PartialEq, Eq)]

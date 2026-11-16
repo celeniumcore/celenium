@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use itertools::Itertools;
 use celenium_consensus_core::pruning::PruningPointProof;
 use celenium_database::prelude::DB;
 use celenium_database::prelude::StoreResult;
@@ -8,6 +7,7 @@ use celenium_database::prelude::{BatchDbWriter, CachedDbItem, DirectDbWriter};
 use celenium_database::registry::DatabaseStorePrefixes;
 use celenium_hashes::Hash;
 use celenium_hashes::ZERO_HASH;
+use itertools::Itertools;
 use rocksdb::WriteBatch;
 use serde::{Deserialize, Serialize};
 

@@ -4,7 +4,6 @@ use std::{
 };
 
 use crate::errors::{ProofWeakness, PruningImportError, PruningImportResult};
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockLevel, BlueWorkType,
     blockhash::{BlockHashExtensions, BlockHashes, ORIGIN},
@@ -19,6 +18,7 @@ use celenium_database::{
 use celenium_hashes::Hash;
 use celenium_pow::{calc_block_level, calc_block_level_check_pow};
 use celenium_utils::vec::VecExtensions;
+use itertools::Itertools;
 use parking_lot::RwLock;
 use rocksdb::WriteBatch;
 

@@ -3,7 +3,6 @@ use crate::{
     feerate::{FeerateEstimator, FeerateEstimatorArgs},
 };
 
-use feerate_key::FeerateTransactionKey;
 use celenium_consensus_core::{
     block::TemplateTransactionSelector,
     config::constants::consensus::{DEFAULT_GAS_PER_LANE_LIMIT, DEFAULT_LANES_PER_BLOCK_LIMIT},
@@ -12,6 +11,7 @@ use celenium_consensus_core::{
     tx::{Transaction, TransactionId},
 };
 use celenium_core::trace;
+use feerate_key::FeerateTransactionKey;
 use rand::{Rng, distributions::Uniform, prelude::Distribution};
 use search_tree::SearchTree;
 use selectors::{MutatingTreeSelector, SequenceSelector, SequenceSelectorInput, TakeAllSelector};
@@ -460,8 +460,6 @@ impl Frontier {
 mod tests {
     use super::*;
     use crate::mempool::config::{Config, DEFAULT_MAXIMUM_TRANSACTION_COUNT};
-    use feerate_key::tests::build_feerate_key;
-    use itertools::Itertools;
     use celenium_consensus_core::{
         config::params::{DEVNET_PARAMS, MAINNET_PARAMS, SIMNET_PARAMS, TESTNET_PARAMS},
         mass::BlockMassLimits,
@@ -469,6 +467,8 @@ mod tests {
         tx::{Transaction, TransactionInput, TransactionOutpoint},
     };
     use celenium_hashes::{HasherBase, TransactionID};
+    use feerate_key::tests::build_feerate_key;
+    use itertools::Itertools;
     use rand::{SeedableRng, rngs::StdRng, thread_rng};
     use std::collections::HashMap;
     use std::sync::Arc;

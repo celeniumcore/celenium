@@ -155,8 +155,8 @@ pub type BlockLevel = u8;
 #[cfg(test)]
 mod tests {
     use super::BlockHasher;
-    use core::hash::{Hash as _, Hasher as _};
     use celenium_hashes::Hash;
+    use core::hash::{Hash as _, Hasher as _};
     #[test]
     fn test_block_hasher() {
         let hash = Hash::from_le_u64([1, 2, 3, 4]);

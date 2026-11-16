@@ -1,9 +1,9 @@
 // Benchmarks are exempt from the arithmetic-side-effects lint.
 #![allow(clippy::arithmetic_side_effects)]
 
+use celenium_utils::sync::rwlock::{RfRwLock, RfRwLockOwnedReadGuard, RfRwLockOwnedWriteGuard};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use futures_util::future::join_all;
-use celenium_utils::sync::rwlock::{RfRwLock, RfRwLockOwnedReadGuard, RfRwLockOwnedWriteGuard};
 use std::sync::Arc;
 use tokio::sync::{OwnedRwLockWriteGuard as OwnedTokioRwLockWriteGuard, RwLock as TokioRwLock};
 

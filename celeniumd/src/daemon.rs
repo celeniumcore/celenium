@@ -9,8 +9,8 @@ use celenium_consensus_core::{
     mining_rules::MiningRules,
 };
 use celenium_consensus_notify::{root::ConsensusNotificationRoot, service::NotifyService};
-use celenium_core::{core::Core, debug, info};
 use celenium_core::{celeniumd_env::version, task::tick::TickService};
+use celenium_core::{core::Core, debug, info};
 use celenium_database::{
     prelude::{CachePolicy, DbWriter, DirectDbWriter, RocksDbPreset},
     registry::DatabaseStorePrefixes,
@@ -46,7 +46,9 @@ use celenium_p2p_flows::{flow_context::FlowContext, service::P2pService};
 
 use celenium_perf_monitor::{builder::Builder as PerfMonitorBuilder, counters::CountersSnapshot};
 use celenium_utxoindex::{UtxoIndex, api::UtxoIndexProxy};
-use celenium_wrpc_server::service::{Options as WrpcServerOptions, WebSocketCounters as WrpcServerCounters, WrpcEncoding, WrpcService};
+use celenium_wrpc_server::service::{
+    Options as WrpcServerOptions, WebSocketCounters as WrpcServerCounters, WrpcEncoding, WrpcService,
+};
 
 /// Desired soft FD limit that needs to be configured
 /// for the celeniumd process.
@@ -110,7 +112,8 @@ pub fn validate_args(args: &Args) -> ConfigResult<()> {
 }
 
 fn request_database_deletion_approval(approve: bool) -> bool {
-    let msg = "Node database is from a different Celeniumd *DB* version and needs to be fully deleted, do you confirm the delete? (y/n)";
+    let msg =
+        "Node database is from a different Celeniumd *DB* version and needs to be fully deleted, do you confirm the delete? (y/n)";
     request_database_deletion_approval_with_message(msg, approve)
 }
 

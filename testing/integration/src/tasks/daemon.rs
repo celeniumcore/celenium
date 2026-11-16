@@ -3,12 +3,12 @@ use crate::{
     tasks::Task,
 };
 use async_trait::async_trait;
-use clap::Parser;
 use celenium_addresses::Address;
 use celenium_consensus_core::network::NetworkType;
 use celenium_core::{trace, warn};
 use celenium_utils::{fd_budget, triggers::SingleTrigger};
 use celeniumd_lib::args::Args;
+use clap::Parser;
 use std::{iter::once, sync::Arc};
 use tokio::task::JoinHandle;
 

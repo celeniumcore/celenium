@@ -15,7 +15,6 @@ mod tests {
         model::{tx_insert::TransactionInsertion, tx_query::TransactionQuery},
         testutils::consensus_mock::ConsensusMock,
     };
-    use itertools::Itertools;
     use celenium_addresses::{Address, Prefix, Version};
     use celenium_consensus_core::{
         api::ConsensusApi,
@@ -38,6 +37,7 @@ mod tests {
         test_helpers::{create_transaction, create_transaction_with_change, op_true_script},
     };
     use celenium_utils::mem_size::MemSizeEstimator;
+    use itertools::Itertools;
     use std::{iter::once, sync::Arc};
     use tokio::sync::mpsc::{error::TryRecvError, unbounded_channel};
 
@@ -1440,7 +1440,8 @@ mod tests {
         // Make the funding amounts always different so that funding txs have different ids
         (0..count)
             .map(|i| {
-                let funding_tx = create_transaction_without_input(vec![1_000 * PRADHA_PER_CELENIUM, 2_500 * PRADHA_PER_CELENIUM + i as u64]);
+                let funding_tx =
+                    create_transaction_without_input(vec![1_000 * PRADHA_PER_CELENIUM, 2_500 * PRADHA_PER_CELENIUM + i as u64]);
                 consensus.add_transaction(funding_tx.clone(), 1);
                 funding_tx
             })
@@ -1505,7 +1506,10 @@ mod tests {
         // Make the funding amounts always different so that funding txs have different ids
         (0..count)
             .map(|i| {
-                create_parent_and_children_transactions(consensus, vec![500 * PRADHA_PER_CELENIUM, 3_000 * PRADHA_PER_CELENIUM + i as u64])
+                create_parent_and_children_transactions(
+                    consensus,
+                    vec![500 * PRADHA_PER_CELENIUM, 3_000 * PRADHA_PER_CELENIUM + i as u64],
+                )
             })
             .unzip()
     }

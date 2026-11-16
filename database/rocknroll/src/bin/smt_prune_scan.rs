@@ -3,7 +3,6 @@ use std::{
     process::ExitCode,
 };
 
-use clap::Parser;
 use celenium_consensus::model::stores::{
     headers::{DbHeadersStore, HeaderStoreReader},
     pruning::{DbPruningStore, PruningStoreReader},
@@ -16,6 +15,7 @@ use celenium_rocknroll::{
     db::{ResolvedConsensusDb, resolve_consensus_db},
 };
 use celenium_smt_store::processor::{SmtStores, StaleSmtEntriesCount};
+use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(about = "Scan a consensus DB for stale SMT pruning entries")]

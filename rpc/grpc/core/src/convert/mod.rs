@@ -1,10 +1,10 @@
 pub mod acceptance_data;
 pub mod address;
 pub mod block;
+pub mod celeniumd;
 pub mod error;
 pub mod feerate_estimate;
 pub mod header;
-pub mod celeniumd;
 pub mod mempool;
 pub mod message;
 pub mod metrics;

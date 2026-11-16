@@ -19,17 +19,15 @@
 use celenium_addresses::{Address, Prefix};
 use celenium_consensus_core::config::params::MAINNET_PARAMS;
 use celenium_consensus_core::constants::TX_VERSION;
-use celenium_consensus_core::hashing::sighash::{calc_schnorr_signature_hash, SigHashReusedValuesUnsync};
+use celenium_consensus_core::hashing::sighash::{SigHashReusedValuesUnsync, calc_schnorr_signature_hash};
 use celenium_consensus_core::tx::{TransactionOutpoint, UtxoEntry};
 use celenium_grpc_client::GrpcClient;
 use celenium_rpc_core::api::rpc::RpcApi;
 use celenium_txscript::{
-    extract_script_pub_key_address, multisig_redeem_script, opcodes::codes::OpData65,
-    pay_to_address_script, pay_to_script_hash_script, script_builder::ScriptBuilder,
+    extract_script_pub_key_address, multisig_redeem_script, opcodes::codes::OpData65, pay_to_address_script,
+    pay_to_script_hash_script, script_builder::ScriptBuilder,
 };
-use celenium_wallet_pskt::prelude::{
-    Creator, Inner, InputBuilder, OutputBuilder, PSKT, SignInputOk, Signature,
-};
+use celenium_wallet_pskt::prelude::{Creator, Inner, InputBuilder, OutputBuilder, PSKT, SignInputOk, Signature};
 use secp256k1::{Keypair, SECP256K1};
 use std::{iter, process::ExitCode};
 
@@ -62,9 +60,7 @@ fn parse_args() -> Result<Args, String> {
             "--url" => url = it.next().ok_or("--url needs a value")?,
             "--keys-file" => keys_file = it.next().ok_or("--keys-file needs a value")?,
             "--to" => to = it.next().ok_or("--to needs a value")?,
-            "--amount" => {
-                amount = it.next().ok_or("--amount needs a value")?.parse().map_err(|e| format!("bad --amount: {e}"))?
-            }
+            "--amount" => amount = it.next().ok_or("--amount needs a value")?.parse().map_err(|e| format!("bad --amount: {e}"))?,
             "--fee" => fee = it.next().ok_or("--fee needs a value")?.parse().map_err(|e| format!("bad --fee: {e}"))?,
             "--check-only" => check_only = true,
             "--dry-run" => dry_run = true,
@@ -82,8 +78,7 @@ fn parse_args() -> Result<Args, String> {
 
 fn read_three_secrets(path: &str) -> Result<[[u8; 32]; 3], String> {
     let raw = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
-    let lines: Vec<&str> =
-        raw.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
+    let lines: Vec<&str> = raw.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
     if lines.len() != 3 {
         return Err(format!("--keys-file must contain exactly 3 lines of 64-hex (K1,K2,K3), got {}", lines.len()));
     }
@@ -91,8 +86,7 @@ fn read_three_secrets(path: &str) -> Result<[[u8; 32]; 3], String> {
     for (i, l) in lines.iter().enumerate() {
         let hex = l.trim_start_matches("0x");
         let bytes = hex::decode(hex).map_err(|e| format!("line {}: bad hex: {e}", i + 1))?;
-        let arr: [u8; 32] =
-            bytes.try_into().map_err(|v: Vec<u8>| format!("line {}: {} bytes, want 32", i + 1, v.len()))?;
+        let arr: [u8; 32] = bytes.try_into().map_err(|v: Vec<u8>| format!("line {}: {} bytes, want 32", i + 1, v.len()))?;
         out[i] = arr;
     }
     Ok(out)
@@ -108,13 +102,7 @@ fn load_keypairs(secrets: &[[u8; 32]; 3]) -> Result<[Keypair; 3], String> {
     for (i, kp) in kps.iter().enumerate() {
         let xonly = hex::encode(kp.x_only_public_key().0.serialize());
         if xonly != expected[i] {
-            return Err(format!(
-                "key {} x-only pubkey does not match K{}: derived {} expected {}",
-                i + 1,
-                i + 1,
-                xonly,
-                expected[i]
-            ));
+            return Err(format!("key {} x-only pubkey does not match K{}: derived {} expected {}", i + 1, i + 1, xonly, expected[i]));
         }
     }
     Ok(kps)
@@ -141,12 +129,10 @@ async fn run() -> Result<(), String> {
     let kps = load_keypairs(&secrets)?;
 
     // Derive the 2-of-3 redeem script and the P2SH source address.
-    let redeem_script: Vec<u8> =
-        multisig_redeem_script(kps.iter().map(|kp| kp.x_only_public_key().0.serialize()), 2)
-            .map_err(|e| format!("multisig_redeem_script: {e}"))?;
+    let redeem_script: Vec<u8> = multisig_redeem_script(kps.iter().map(|kp| kp.x_only_public_key().0.serialize()), 2)
+        .map_err(|e| format!("multisig_redeem_script: {e}"))?;
     let p2sh_spk = pay_to_script_hash_script(&redeem_script);
-    let source = extract_script_pub_key_address(&p2sh_spk, Prefix::Mainnet)
-        .map_err(|e| format!("extract source address: {e}"))?;
+    let source = extract_script_pub_key_address(&p2sh_spk, Prefix::Mainnet).map_err(|e| format!("extract source address: {e}"))?;
     let dest = if args.to.is_empty() {
         None
     } else {
@@ -188,20 +174,14 @@ async fn run() -> Result<(), String> {
     if let Some(d) = &dest {
         query.push(d.clone());
     }
-    let balances = client
-        .get_balances_by_addresses(query)
-        .await
-        .map_err(|e| format!("get_balances_by_addresses: {e}"))?;
+    let balances = client.get_balances_by_addresses(query).await.map_err(|e| format!("get_balances_by_addresses: {e}"))?;
     println!("--- balances ---");
     for b in &balances {
         let bal = b.balance.unwrap_or(0);
         println!("  {}  {} CEN ({} pradha)", b.address, pradha_to_cen(bal), bal);
     }
 
-    let utxos = client
-        .get_utxos_by_addresses(vec![source.clone()])
-        .await
-        .map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
+    let utxos = client.get_utxos_by_addresses(vec![source.clone()]).await.map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
     println!("source utxos   : {}", utxos.len());
 
     if args.check_only {
@@ -229,8 +209,7 @@ async fn run() -> Result<(), String> {
             chosen = Some((u.outpoint.into(), entry));
         }
     }
-    let (outpoint, entry) =
-        chosen.ok_or_else(|| "no spendable premine UTXO with enough value".to_string())?;
+    let (outpoint, entry) = chosen.ok_or_else(|| "no spendable premine UTXO with enough value".to_string())?;
     println!("spending       : idx {} amount {} CEN", outpoint.index, pradha_to_cen(entry.amount));
 
     let total_in = entry.amount;
@@ -269,11 +248,7 @@ async fn run() -> Result<(), String> {
         .output(output_change)
         .map_err(|e| format!("add change output: {e}"))?;
 
-    let signer = constructor
-        .updater()
-        .set_sequence(u64::MAX, 0)
-        .map_err(|e| format!("set_sequence: {e}"))?
-        .signer();
+    let signer = constructor.updater().set_sequence(u64::MAX, 0).map_err(|e| format!("set_sequence: {e}"))?.signer();
 
     let reused_values = SigHashReusedValuesUnsync::new();
     let signer = signer
@@ -358,20 +333,14 @@ async fn run() -> Result<(), String> {
     }
 
     let rpc_tx: celenium_rpc_core::RpcTransaction = (&tx).into();
-    let submitted = client
-        .submit_transaction(rpc_tx, false)
-        .await
-        .map_err(|e| format!("submit_transaction rejected: {e}"))?;
+    let submitted = client.submit_transaction(rpc_tx, false).await.map_err(|e| format!("submit_transaction rejected: {e}"))?;
     println!("submitted      : {submitted}");
 
     if submitted != txid {
         return Err(format!("returned transaction id {submitted} does not match the sent tx {txid}"));
     }
 
-    let mempool = client
-        .get_mempool_entry(txid, true, false)
-        .await
-        .map_err(|e| format!("get_mempool_entry: {e}"))?;
+    let mempool = client.get_mempool_entry(txid, true, false).await.map_err(|e| format!("get_mempool_entry: {e}"))?;
     println!("mempool        : accepted (fee {} pradha)", mempool.fee);
 
     client.disconnect().await.map_err(|e| format!("disconnect: {e}"))?;
