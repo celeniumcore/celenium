@@ -777,6 +777,8 @@ async fn handle_http_request(
                 serde_json::json!({
                     "rewardPradha": s.reward_pradha_today(),
                     "maxRewardPradha": crate::faucet::FAUCET_MAX_REWARD_PRADHA,
+                    "dripDurationSecs": 86_400,
+                    "dripModel": "linear-utc-day",
                     "claimantsToday": s.claimants_today(),
                     "expectedClaimants": s.expected_claimants_today(),
                     "dailyCapPradha": daily_cap,
@@ -819,15 +821,14 @@ async fn handle_http_request(
                         Some(e) => (e.balance_pradha, e.total_claimed_pradha),
                         None => (0u64, 0u64),
                     };
-                    let can_claim = match s.balance(addr) {
-                        Some(e) => e.last_claim_day != crate::faucet::FaucetState::current_day(),
-                        None => true,
-                    };
+                    let reward = s.claimable_now(addr);
                     serde_json::json!({
                         "address": addr,
                         "balancePradha": balance,
                         "totalClaimedPradha": total,
-                        "canClaimToday": can_claim,
+                        "rewardPradha": reward,
+                        "claimedTodayPradha": s.claimed_today_for(addr),
+                        "canClaimToday": reward > 0,
                     })
                     .to_string()
                 }
@@ -866,7 +867,9 @@ async fn handle_http_request(
                             "ok": true,
                             "address": address,
                             "balancePradha": entry.balance_pradha,
-                            "rewardPradha": s.claim_reward_for(address),
+                            "rewardPradha": entry.last_claim_payout_pradha,
+                            "claimedTodayPradha": entry.last_claim_reward_pradha,
+                            "dailyRewardPradha": entry.daily_reward_pradha,
                         })
                         .to_string(),
                         Err(e) => serde_json::json!({ "error": e.to_string() }).to_string(),
