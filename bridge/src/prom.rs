@@ -496,6 +496,12 @@ fn faucet_claim_response_at(
     };
     if let Err(e) = candidate.save(ledger_path) {
         tracing::error!("faucet claim persistence failed: {e}");
+        if candidate.storage_uncertain {
+            *state = candidate;
+            return serde_json::json!({
+                "error": "claim storage is uncertain; claims and withdrawals paused", "errorCode": "StorageUnavailable"
+            });
+        }
         return serde_json::json!({
             "error": "could not save faucet claim; retry later", "errorCode": "PersistenceFailed"
         });
@@ -668,7 +674,17 @@ async fn withdraw_response(body: &str) -> String {
             })
             .to_string();
         }
-        let _ = s.save(std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH));
+        if let Err(e) = s.save(std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH)) {
+            s.storage_uncertain = true;
+            tracing::error!("faucet withdrawal accepted but ledger persistence failed: {e}");
+            return serde_json::json!({
+                "error": "transaction accepted but ledger storage needs recovery; contact the operator with this txid",
+                "errorCode": "StorageUnavailable",
+                "txid": txid,
+                "balancePradha": s.balance(&address).map(|e| e.balance_pradha).unwrap_or(0),
+            })
+            .to_string();
+        }
         s.balance(&address).map(|e| e.balance_pradha).unwrap_or(0)
     };
 
@@ -843,9 +859,10 @@ async fn handle_http_request(
     }
 
     if request.starts_with("GET /api/faucet/balance") {
-        // Query params live in `path` (already parsed from the request line).
         let address = path.split('?').nth(1).and_then(|qs| {
-            qs.split('&').filter_map(|kv| kv.split_once('=')).find_map(|(k, v)| (k == "address").then(|| v.to_string()))
+            qs.split('&')
+                .filter_map(|kv| kv.split_once('='))
+                .find_map(|(k, v)| (k == "address").then(|| percent_encoding::percent_decode_str(v).decode_utf8_lossy().into_owned()))
         });
 
         let body = match address.as_deref() {
@@ -2275,6 +2292,14 @@ mod tests {
         assert!(body["dailyRewardPradha"].is_u64());
         assert!(body["serverTimeSecs"].is_u64());
         assert_eq!(body["canClaimToday"].as_bool(), Some(body["rewardPradha"].as_u64().unwrap() > 0));
+        let encoded = request.replace("cen69:", "cen69%3A");
+        let response = send_request(mode.clone(), &encoded).await;
+        let encoded_body: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(encoded_body["address"], body["address"]);
+        assert_eq!(encoded_body["dripDurationSecs"], 86_400);
+        let double_encoded = request.replace("cen69:", "cen69%253A");
+        let response = send_request(mode.clone(), &double_encoded).await;
+        assert!(response.contains("InvalidAddress"));
         let response = send_request(mode, "POST /api/faucet/claim HTTP/1.1").await;
         assert!(response.contains("error"));
     }

@@ -33,6 +33,6 @@ Waktu klaim hanya berasal dari server. Parameter waktu pengujian tidak diekspos 
 
 ## Persistensi dan deployment
 
-Klaim baru harus tersimpan sebelum respons sukses. File ledger ditulis melalui berkas sementara dan rename; JSON rusak menyebabkan startup gagal, bukan mengosongkan saldo. Backup ledger dan binary harus dibuat sebelum mengganti bridge.
+Klaim baru harus tersimpan sebelum respons sukses. File ledger ditulis melalui berkas sementara dan rename; JSON rusak menyebabkan startup gagal, bukan mengosongkan saldo. Jika sinkronisasi direktori gagal setelah rename, state terpasang dipertahankan, API mengembalikan `StorageUnavailable`, dan klaim serta penarikan ditahan sampai storage dipulihkan. Backup ledger dan binary harus dibuat sebelum mengganti bridge.
 
 Tes lokal memakai ledger terisolasi dan waktu terkendali. Probe produksi bersifat baca-saja; verifikasi API tidak membuktikan pembayaran on-chain.
