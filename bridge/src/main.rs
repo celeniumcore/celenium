@@ -298,7 +298,7 @@ async fn main() -> Result<(), anyhow::Error> {
         // claims survive a bridge restart; on-chain settlement is separate.
         let faucet_state = Arc::new(std::sync::Mutex::new(
             celenium_stratum_bridge::FaucetState::load(std::path::Path::new(celenium_stratum_bridge::FAUCET_LEDGER_PATH))
-                .unwrap_or_default(),
+                .map_err(|e| anyhow::anyhow!("Cannot load faucet ledger; refusing to start with empty balances: {e}"))?,
         ));
         prom::set_faucet_state(faucet_state);
 
