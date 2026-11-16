@@ -476,6 +476,42 @@ async fn send_response(
     Ok(())
 }
 
+fn faucet_claim_response_at(
+    state: &mut crate::faucet::FaucetState,
+    body: &str,
+    ledger_path: &std::path::Path,
+    now: u64,
+) -> serde_json::Value {
+    let request: serde_json::Value = match serde_json::from_str(body) {
+        Ok(value) => value,
+        Err(_) => return serde_json::json!({ "error": "invalid JSON body", "errorCode": "InvalidRequest" }),
+    };
+    let address = request.get("address").and_then(|v| v.as_str()).unwrap_or("");
+    let device = request.get("deviceId").and_then(|v| v.as_str()).unwrap_or("");
+    // Commit memori hanya setelah ledger baru tersimpan.
+    let mut candidate = state.clone();
+    let entry = match candidate.claim_at(address, device, now) {
+        Ok(entry) => entry,
+        Err(e) => return serde_json::json!({ "error": e.to_string(), "errorCode": e.code() }),
+    };
+    if let Err(e) = candidate.save(ledger_path) {
+        tracing::error!("faucet claim persistence failed: {e}");
+        return serde_json::json!({
+            "error": "could not save faucet claim; retry later", "errorCode": "PersistenceFailed"
+        });
+    }
+    *state = candidate;
+    serde_json::json!({
+        "ok": true, "address": address,
+        "balancePradha": entry.balance_pradha,
+        "rewardPradha": entry.last_claim_payout_pradha,
+        "claimedTodayPradha": entry.last_claim_reward_pradha,
+        "dailyRewardPradha": entry.daily_reward_pradha,
+        "startedDrip": entry.last_claim_payout_pradha == 0,
+        "serverTimeSecs": now,
+    })
+}
+
 /// `POST /api/faucet/withdraw` — pay a participation balance out on-chain.
 ///
 /// Body: `{"address": "cen69:..."}` (whole balance) or with `"amountPradha"`.
@@ -777,6 +813,8 @@ async fn handle_http_request(
                 serde_json::json!({
                     "rewardPradha": s.reward_pradha_today(),
                     "maxRewardPradha": crate::faucet::FAUCET_MAX_REWARD_PRADHA,
+                    "dripDurationSecs": 86_400,
+                    "dripModel": "linear-utc-day",
                     "claimantsToday": s.claimants_today(),
                     "expectedClaimants": s.expected_claimants_today(),
                     "dailyCapPradha": daily_cap,
@@ -815,21 +853,7 @@ async fn handle_http_request(
                 None => r#"{"error":"faucet not ready"}"#.to_string(),
                 Some(state) => {
                     let s = state.lock().unwrap();
-                    let (balance, total) = match s.balance(addr) {
-                        Some(e) => (e.balance_pradha, e.total_claimed_pradha),
-                        None => (0u64, 0u64),
-                    };
-                    let can_claim = match s.balance(addr) {
-                        Some(e) => e.last_claim_day != crate::faucet::FaucetState::current_day(),
-                        None => true,
-                    };
-                    serde_json::json!({
-                        "address": addr,
-                        "balancePradha": balance,
-                        "totalClaimedPradha": total,
-                        "canClaimToday": can_claim,
-                    })
-                    .to_string()
+                    s.balance_response(addr, crate::faucet::FaucetState::now_secs()).to_string()
                 }
             },
             _ => r#"{"error":"missing address query parameter"}"#.to_string(),
@@ -845,35 +869,17 @@ async fn handle_http_request(
     }
 
     if request.starts_with("POST /api/faucet/claim") {
-        let body_start = request.find("\r\n\r\n").unwrap_or(request.len());
-        #[allow(clippy::arithmetic_side_effects, reason = "ARITH-SAFETY(LENGTH)")]
-        let body = &request[body_start + 4..];
-
+        let body = request.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or("");
         let resp = match FAUCET_STATE.get() {
-            None => r#"{"error":"faucet not ready"}"#.to_string(),
-            Some(state) => match serde_json::from_str::<serde_json::Value>(body) {
-                Err(e) => serde_json::json!({ "error": format!("invalid json: {e}") }).to_string(),
-                Ok(v) => {
-                    let address = v.get("address").and_then(|x| x.as_str()).unwrap_or("");
-                    let device_id = v.get("deviceId").and_then(|x| x.as_str()).unwrap_or("");
-                    let mut s = state.lock().unwrap();
-                    let result = s.claim(address, device_id);
-                    if result.is_ok() {
-                        let _ = s.save(std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH));
-                    }
-                    match result {
-                        Ok(entry) => serde_json::json!({
-                            "ok": true,
-                            "address": address,
-                            "balancePradha": entry.balance_pradha,
-                            "rewardPradha": s.claim_reward_for(address),
-                        })
-                        .to_string(),
-                        Err(e) => serde_json::json!({ "error": e.to_string() }).to_string(),
-                    }
-                }
-            },
-        };
+            None => serde_json::json!({ "error": "faucet not ready" }),
+            Some(state) => faucet_claim_response_at(
+                &mut state.lock().unwrap(),
+                body,
+                std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH),
+                crate::faucet::FaucetState::now_secs(),
+            ),
+        }
+        .to_string();
 
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\n\r\n{}",
@@ -2220,6 +2226,57 @@ mod tests {
     fn temp_config_path() -> PathBuf {
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
         std::env::temp_dir().join(format!("rkstratum_config_test_{}_{}.yaml", std::process::id(), nanos))
+    }
+
+    #[test]
+    fn faucet_claim_response_persists_incremental_amounts() {
+        let mut state = crate::faucet::FaucetState::default();
+        let path = std::env::temp_dir().join(format!("faucet-api-{}.json", uuid::Uuid::new_v4()));
+        let address = "cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6";
+        let body = serde_json::json!({"address": address, "deviceId": "test-device"}).to_string();
+        let first = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000);
+        assert_eq!(first["rewardPradha"], 20);
+        assert_eq!(first["balancePradha"], 20);
+        assert_eq!(faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000)["errorCode"], "NothingAccrued");
+        let second = faucet_claim_response_at(&mut state, &body, &path, 1_794_790_800);
+        assert_eq!(second["rewardPradha"], 21);
+        assert_eq!(second["claimedTodayPradha"], 41);
+        assert_eq!(second["dailyRewardPradha"], 1000);
+        let loaded = crate::faucet::FaucetState::load(&path).unwrap();
+        assert_eq!(loaded.balance(address).unwrap().balance_pradha, 41);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn faucet_claim_save_failure_keeps_memory_unchanged() {
+        let mut state = crate::faucet::FaucetState::default();
+        let blocker = std::env::temp_dir().join(format!("faucet-api-blocker-{}", uuid::Uuid::new_v4()));
+        std::fs::write(&blocker, b"existing file").unwrap();
+        let body = r#"{"address":"cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6","deviceId":"device"}"#;
+        let before = serde_json::to_value(&state).unwrap();
+        let result = faucet_claim_response_at(&mut state, body, &blocker.join("ledger.json"), 1_794_789_000);
+        assert_eq!(result["errorCode"], "PersistenceFailed");
+        assert_eq!(serde_json::to_value(&state).unwrap(), before);
+        assert_eq!(std::fs::read(&blocker).unwrap(), b"existing file");
+        std::fs::remove_file(blocker).unwrap();
+    }
+
+    #[tokio::test]
+    async fn faucet_balance_http_exposes_drip_contract() {
+        let state = std::sync::Arc::new(std::sync::Mutex::new(crate::faucet::FaucetState::default()));
+        set_faucet_state(state);
+        let mode = HttpMode::Aggregated { web_bind: "127.0.0.1:0".to_string() };
+        let request =
+            "GET /api/faucet/balance?address=cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6 HTTP/1.1\r\n\r\n";
+        let response = send_request(mode.clone(), request).await;
+        let body: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(body["dripDurationSecs"], 86_400);
+        assert_eq!(body["dripModel"], "linear-utc-day");
+        assert!(body["dailyRewardPradha"].is_u64());
+        assert!(body["serverTimeSecs"].is_u64());
+        assert_eq!(body["canClaimToday"].as_bool(), Some(body["rewardPradha"].as_u64().unwrap() > 0));
+        let response = send_request(mode, "POST /api/faucet/claim HTTP/1.1").await;
+        assert!(response.contains("error"));
     }
 
     #[tokio::test]
