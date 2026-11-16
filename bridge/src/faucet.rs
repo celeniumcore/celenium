@@ -50,13 +50,12 @@ pub const FAUCET_WITHDRAW_COOLDOWN_SECS: u64 = 3_600;
 /// pernah membayar lebih dari plafon ini untuk biaya transaksi per hari.
 pub const FAUCET_DAILY_FEE_BUDGET_PRADHA: u64 = 250_000_000;
 
-/// Nominal withdraw minimum, dalam pradha (0,0005 CEN).
+/// Nominal withdraw minimum, dalam pradha (0,00001 CEN).
 ///
-/// Fee transfer on-chain yang dibayar reservoir ≈ 25.000 pradha, jadi ambang ini
-/// menjaga nilai yang dikirim tetap dua kali biayanya. Dengan reward maksimum
-/// 1000 pradha/hari, saldo ini terkumpul dalam ~50 hari partisipasi — cukup
-/// jarang untuk tidak membanjiri jaringan dengan transaksi receh.
-pub const FAUCET_MIN_WITHDRAW_PRADHA: u64 = 50_000;
+/// Disamakan dengan plafon klaim harian, agar saldo satu klaim penuh dapat
+/// ditarik. Penarikan tetap tunduk pada cooldown per alamat dan anggaran fee
+/// harian; fee jaringan tetap dibayar reservoir.
+pub const FAUCET_MIN_WITHDRAW_PRADHA: u64 = 1_000;
 
 /// Reward minimum per klaim, dalam pradha.
 ///
@@ -623,6 +622,20 @@ mod tests {
             s.record_withdraw(ADDR, 1, 25);
         }
         assert!(matches!(s.check_withdraw(ADDR), Err(WithdrawError::FeeBudgetExhausted { .. })));
+    }
+
+    /// Ambang tarik harus terjangkau satu klaim harian pada plafon penuh.
+    /// Kalau ambang lebih besar daripada reward maksimum, saldo partisipasi
+    /// menumpuk di ledger dan tidak pernah bisa dipindah on-chain.
+    #[test]
+    fn minimum_withdraw_is_reachable_from_one_daily_claim() {
+        assert_eq!(FAUCET_MIN_WITHDRAW_PRADHA, 1_000, "ambang tarik harus 1.000 pradha");
+        assert!(
+            FAUCET_MIN_WITHDRAW_PRADHA <= FAUCET_MAX_REWARD_PRADHA,
+            "ambang {} melebihi satu klaim penuh {}",
+            FAUCET_MIN_WITHDRAW_PRADHA,
+            FAUCET_MAX_REWARD_PRADHA
+        );
     }
 
     /// Reward maximum 1000 pradha hanya berlaku saat peserta sedikit.
