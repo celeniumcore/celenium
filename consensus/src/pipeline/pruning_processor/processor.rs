@@ -24,9 +24,6 @@ use crate::{
     },
     processes::{pruning_proof::PruningProofManager, reachability::inquirer as reachability, relations},
 };
-use crossbeam_channel::Receiver as CrossbeamReceiver;
-use hashbrown::hash_map::Entry::Vacant;
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashMap, BlockHashSet, BlockLevel,
     blockhash::ORIGIN,
@@ -42,6 +39,9 @@ use celenium_database::prelude::{BatchDbWriter, DB, MemoryWriter, StoreResultExt
 use celenium_hashes::{Hash, ZERO_HASH};
 use celenium_muhash::MuHash;
 use celenium_utils::iter::IterExtensions;
+use crossbeam_channel::Receiver as CrossbeamReceiver;
+use hashbrown::hash_map::Entry::Vacant;
+use itertools::Itertools;
 use parking_lot::RwLockUpgradableReadGuard;
 use rocksdb::WriteBatch;
 use std::{
@@ -722,7 +722,8 @@ impl PruningProcessor {
 
     fn assert_smt_rebuilding(&self, new_pruning_point: Hash, pruning_point_blue_score: u64) {
         info!("Rebuilding pruning point SMT root after pruning data (sanity test)");
-        let bounds = celenium_smt_store::processor::SmtReadBounds::for_pov(pruning_point_blue_score, self.config.params.finality_depth());
+        let bounds =
+            celenium_smt_store::processor::SmtReadBounds::for_pov(pruning_point_blue_score, self.config.params.finality_depth());
         let expected_root = self.smt_stores.get_lanes_root(bounds, |bh| self.is_smt_canonical(bh, new_pruning_point));
         let expected_count = self.smt_metadata_store.get(new_pruning_point).unwrap().active_lanes_count();
         let (root, count) = self

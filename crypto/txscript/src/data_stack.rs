@@ -1,8 +1,8 @@
 use crate::{MAX_SCRIPT_ELEMENT_SIZE, TxScriptError};
-use core::fmt::Debug;
-use core::iter;
 use celenium_hashes::Hash;
 use celenium_txscript_errors::SerializationError;
+use core::fmt::Debug;
+use core::iter;
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::num::TryFromIntError;

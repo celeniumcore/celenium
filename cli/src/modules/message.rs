@@ -68,7 +68,10 @@ impl Message {
     async fn display_help(self: Arc<Self>, ctx: Arc<CeleniumCli>, _argv: Vec<String>) -> Result<()> {
         ctx.term().help(
             &[
-                ("sign <celenium_address>", "Sign a message with the private key that matches the given address. Prompts for message."),
+                (
+                    "sign <celenium_address>",
+                    "Sign a message with the private key that matches the given address. Prompts for message.",
+                ),
                 (
                     "verify <celenium_address> <signature>",
                     "Verify the signature against the message and celenium_address. Prompts for message.",

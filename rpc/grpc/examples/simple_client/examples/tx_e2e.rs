@@ -163,10 +163,7 @@ async fn run() -> Result<(), String> {
     if let Some(d) = &dest {
         query.push(d.clone());
     }
-    let balances = client
-        .get_balances_by_addresses(query)
-        .await
-        .map_err(|e| format!("get_balances_by_addresses: {e}"))?;
+    let balances = client.get_balances_by_addresses(query).await.map_err(|e| format!("get_balances_by_addresses: {e}"))?;
     println!("--- balances ---");
     for b in &balances {
         let addr = b.address.to_string();
@@ -175,18 +172,11 @@ async fn run() -> Result<(), String> {
     }
 
     if args.check_only {
-        let utxos = client
-            .get_utxos_by_addresses(vec![source.clone()])
-            .await
-            .map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
+        let utxos = client.get_utxos_by_addresses(vec![source.clone()]).await.map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
         println!("--- source utxos ({}) ---", utxos.len());
         for u in &utxos {
             let entry: UtxoEntry = u.utxo_entry.clone().into();
-            let mature = if entry.is_coinbase {
-                entry.block_daa_score + COINBASE_MATURITY_DAA <= daa
-            } else {
-                true
-            };
+            let mature = if entry.is_coinbase { entry.block_daa_score + COINBASE_MATURITY_DAA <= daa } else { true };
             println!(
                 "  {} idx {} amount {} CEN daa {} coinbase {} mature {}",
                 u.outpoint.transaction_id,
@@ -203,20 +193,13 @@ async fn run() -> Result<(), String> {
     }
 
     // --- pick a spendable UTXO ---
-    let utxos = client
-        .get_utxos_by_addresses(vec![source.clone()])
-        .await
-        .map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
+    let utxos = client.get_utxos_by_addresses(vec![source.clone()]).await.map_err(|e| format!("get_utxos_by_addresses: {e}"))?;
     println!("utxos found    : {}", utxos.len());
 
     let mut chosen: Option<(TransactionOutpoint, UtxoEntry)> = None;
     for u in &utxos {
         let entry: UtxoEntry = u.utxo_entry.clone().into();
-        let mature = if entry.is_coinbase {
-            entry.block_daa_score + COINBASE_MATURITY_DAA <= daa
-        } else {
-            true
-        };
+        let mature = if entry.is_coinbase { entry.block_daa_score + COINBASE_MATURITY_DAA <= daa } else { true };
         println!(
             "  outpoint {} idx {} amount {} CEN daa {} coinbase {} mature {}",
             u.outpoint.transaction_id,
@@ -242,15 +225,7 @@ async fn run() -> Result<(), String> {
     let input = TransactionInput::new(outpoint, vec![], MAX_TX_IN_SEQUENCE_NUM, 1);
     let payment_output = TransactionOutput::new(args.amount, dest_spk.ok_or("missing --to address")?);
     let change_output = TransactionOutput::new(change, spk.clone());
-    let tx = Transaction::new(
-        TX_VERSION,
-        vec![input],
-        vec![payment_output, change_output],
-        0,
-        SUBNETWORK_ID_NATIVE,
-        0,
-        vec![],
-    );
+    let tx = Transaction::new(TX_VERSION, vec![input], vec![payment_output, change_output], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
 
     let signable = SignableTransaction::with_entries(tx, vec![entry]);
     let signed = sign::sign_with_multiple_v2(signable, &[secret]);
@@ -268,10 +243,7 @@ async fn run() -> Result<(), String> {
     println!("tx id          : {txid}");
 
     let rpc_tx: celenium_rpc_core::RpcTransaction = (&tx).into();
-    let submitted = client
-        .submit_transaction(rpc_tx, false)
-        .await
-        .map_err(|e| format!("submit_transaction rejected: {e}"))?;
+    let submitted = client.submit_transaction(rpc_tx, false).await.map_err(|e| format!("submit_transaction rejected: {e}"))?;
     println!("submitted      : {submitted}");
 
     if submitted != txid {
@@ -279,10 +251,7 @@ async fn run() -> Result<(), String> {
     }
 
     // --- confirm the node actually holds it in the mempool ---
-    let entry = client
-        .get_mempool_entry(txid, true, false)
-        .await
-        .map_err(|e| format!("get_mempool_entry: {e}"))?;
+    let entry = client.get_mempool_entry(txid, true, false).await.map_err(|e| format!("get_mempool_entry: {e}"))?;
     println!("mempool        : accepted (fee {} pradha)", entry.fee);
 
     client.disconnect().await.map_err(|e| format!("disconnect: {e}"))?;

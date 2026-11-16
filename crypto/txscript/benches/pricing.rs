@@ -7,7 +7,6 @@ use ark_groth16::{Groth16, VerifyingKey};
 use ark_relations::gr1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::SNARK;
-use criterion::{BenchmarkId, Criterion, SamplingMode, black_box, criterion_group, criterion_main};
 use celenium_addresses::{Address, Prefix, Version};
 use celenium_consensus_core::config::params::MAINNET_PARAMS;
 use celenium_consensus_core::hashing::sighash::{
@@ -31,6 +30,7 @@ use celenium_txscript::{
     },
 };
 use celenium_txscript_errors::TxScriptError;
+use criterion::{BenchmarkId, Criterion, SamplingMode, black_box, criterion_group, criterion_main};
 use rand::{SeedableRng, rngs::StdRng};
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;

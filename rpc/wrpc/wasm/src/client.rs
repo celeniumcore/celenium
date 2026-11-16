@@ -10,7 +10,6 @@
 use crate::Resolver;
 use crate::imports::*;
 use crate::{RpcEventCallback, RpcEventType, RpcEventTypeOrCallback};
-use js_sys::{Function, Object};
 use celenium_addresses::{Address, AddressOrStringArrayT};
 use celenium_consensus_client::UtxoEntryReference;
 use celenium_consensus_core::network::{NetworkType, NetworkTypeT};
@@ -24,6 +23,7 @@ pub use celenium_rpc_macros::{
     build_wrpc_wasm_bindgen_interface, build_wrpc_wasm_bindgen_subscriptions, declare_typescript_wasm_interface as declare,
 };
 use celenium_wasm_core::events::{Sink, get_event_targets};
+use js_sys::{Function, Object};
 pub use serde_wasm_bindgen::from_value;
 use workflow_rpc::client::Ctl;
 pub use workflow_rpc::client::IConnectOptions;

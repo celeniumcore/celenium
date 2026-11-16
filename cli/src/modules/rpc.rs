@@ -1,6 +1,6 @@
 use crate::imports::*;
-use convert_case::{Case, Casing};
 use celenium_rpc_core::api::ops::RpcApiOps;
+use convert_case::{Case, Casing};
 
 #[derive(Default, Handler)]
 #[help("Execute RPC commands against the connected Celenium node")]

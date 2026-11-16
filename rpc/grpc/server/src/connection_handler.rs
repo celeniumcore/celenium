@@ -4,7 +4,6 @@ use crate::{
     manager::{ManagerEvent, RegistrationRequest},
     request_handler::{factory::Factory, interface::Interface},
 };
-use futures::{FutureExt, Stream};
 use celenium_core::{debug, info, warn};
 use celenium_grpc_core::{
     RPC_MAX_MESSAGE_SIZE,
@@ -31,6 +30,7 @@ use celenium_utils_tower::{
     counters::TowerConnectionCounters,
     middleware::{CountBytesBody, MapRequestBodyLayer, MapResponseBodyLayer},
 };
+use futures::{FutureExt, Stream};
 use std::fmt::Debug;
 use std::{
     pin::Pin,

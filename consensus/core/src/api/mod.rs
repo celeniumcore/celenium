@@ -1,8 +1,8 @@
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use futures_util::future::BoxFuture;
 use celenium_muhash::MuHash;
+use futures_util::future::BoxFuture;
 
 use crate::{
     BlockHashSet, BlueWorkType, ChainPath,

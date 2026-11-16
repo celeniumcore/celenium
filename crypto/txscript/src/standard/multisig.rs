@@ -71,7 +71,6 @@ pub fn multisig_redeem_script_ecdsa(pub_keys: impl Iterator<Item = impl Borrow<[
 mod tests {
     use super::*;
     use crate::{EngineContext, TxScriptEngine, caches::Cache, opcodes::codes::OpData65, pay_to_script_hash_script};
-    use core::str::FromStr;
     use celenium_consensus_core::{
         hashing::{
             sighash::{SigHashReusedValuesUnsync, calc_ecdsa_signature_hash, calc_schnorr_signature_hash},
@@ -81,6 +80,7 @@ mod tests {
         tx::*,
     };
     use celenium_utils::hex::FromHex;
+    use core::str::FromStr;
     use rand::thread_rng;
     use secp256k1::Keypair;
     use std::{iter, iter::empty};
@@ -302,11 +302,8 @@ mod tests {
         // CLTV-locked 2-of-3 multisig P2SH: the CEN premine structure.
         // redeem = <locktime> OP_CHECKLOCKTIMEVERIFY OP_2 <K> OP_3 OP_CHECKMULTISIG
         let [kp1, kp2, kp3] = kp();
-        let keys = [
-            kp1.x_only_public_key().0.serialize(),
-            kp2.x_only_public_key().0.serialize(),
-            kp3.x_only_public_key().0.serialize(),
-        ];
+        let keys =
+            [kp1.x_only_public_key().0.serialize(), kp2.x_only_public_key().0.serialize(), kp3.x_only_public_key().0.serialize()];
         let lock_time_ms = 500_000_000_000 + 60_000; // ms timestamp (> LOCK_TIME_THRESHOLD)
         let mut builder = ScriptBuilder::new();
         builder.add_lock_time(lock_time_ms).unwrap();

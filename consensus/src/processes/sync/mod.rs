@@ -1,10 +1,10 @@
 use std::{cmp::min, ops::Deref, sync::Arc};
 
-use itertools::Itertools;
 use celenium_consensus_core::errors::sync::{SyncManagerError, SyncManagerResult};
 use celenium_database::prelude::StoreResultExt;
 use celenium_hashes::Hash;
 use celenium_math::uint::malachite_base::num::arithmetic::traits::CeilingLogBase2;
+use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::model::{

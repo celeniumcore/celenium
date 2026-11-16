@@ -91,7 +91,9 @@ impl From<&CeleniumdMessagePayload> for CeleniumdMessagePayloadType {
             }
             CeleniumdMessagePayload::BlockWithTrustedData(_) => CeleniumdMessagePayloadType::BlockWithTrustedData,
             CeleniumdMessagePayload::DoneBlocksWithTrustedData(_) => CeleniumdMessagePayloadType::DoneBlocksWithTrustedData,
-            CeleniumdMessagePayload::RequestPruningPointAndItsAnticone(_) => CeleniumdMessagePayloadType::RequestPruningPointAndItsAnticone,
+            CeleniumdMessagePayload::RequestPruningPointAndItsAnticone(_) => {
+                CeleniumdMessagePayloadType::RequestPruningPointAndItsAnticone
+            }
             CeleniumdMessagePayload::BlockHeaders(_) => CeleniumdMessagePayloadType::BlockHeaders,
             CeleniumdMessagePayload::RequestNextHeaders(_) => CeleniumdMessagePayloadType::RequestNextHeaders,
             CeleniumdMessagePayload::DoneHeaders(_) => CeleniumdMessagePayloadType::DoneHeaders,
@@ -115,7 +117,9 @@ impl From<&CeleniumdMessagePayload> for CeleniumdMessagePayloadType {
             CeleniumdMessagePayload::RequestPruningPointSmtState(_) => CeleniumdMessagePayloadType::RequestPruningPointSmtState,
             CeleniumdMessagePayload::SmtMetadata(_) => CeleniumdMessagePayloadType::SmtMetadata,
             CeleniumdMessagePayload::SmtLaneChunk(_) => CeleniumdMessagePayloadType::SmtLaneChunk,
-            CeleniumdMessagePayload::RequestNextPruningPointSmtChunk(_) => CeleniumdMessagePayloadType::RequestNextPruningPointSmtChunk,
+            CeleniumdMessagePayload::RequestNextPruningPointSmtChunk(_) => {
+                CeleniumdMessagePayloadType::RequestNextPruningPointSmtChunk
+            }
             CeleniumdMessagePayload::PruningPointProofChunk(_) => CeleniumdMessagePayloadType::PruningPointProofChunk,
             CeleniumdMessagePayload::PruningPointProofChunksEnd(_) => CeleniumdMessagePayloadType::PruningPointProofChunksEnd,
             CeleniumdMessagePayload::TrustedDataChunk(_) => CeleniumdMessagePayloadType::TrustedDataChunk,

@@ -8,9 +8,9 @@ use celenium_database::prelude::{CachePolicy, StoreError};
 use celenium_database::registry::{DatabaseStorePrefixes, SEPARATOR};
 use celenium_hashes::Hash;
 
+use celenium_utils::mem_size::MemSizeEstimator;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use itertools::Itertools;
-use celenium_utils::mem_size::MemSizeEstimator;
 use rocksdb::WriteBatch;
 use serde::{Deserialize, Serialize};
 use std::iter::once;

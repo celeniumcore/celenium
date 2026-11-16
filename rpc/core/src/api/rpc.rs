@@ -9,8 +9,8 @@
 use crate::api::connection::DynRpcConnection;
 use crate::{RpcResult, model::*, notify::connection::ChannelConnection};
 use async_trait::async_trait;
-use downcast::{AnySync, downcast_sync};
 use celenium_notify::{listener::ListenerId, scope::Scope, subscription::Command};
+use downcast::{AnySync, downcast_sync};
 use std::sync::Arc;
 
 pub const MAX_SAFE_WINDOW_SIZE: u32 = 10_000;

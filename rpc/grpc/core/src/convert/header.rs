@@ -114,9 +114,9 @@ try_from!(item: &protowire::RpcBlockLevelParents, Vec<RpcHash>, {
 #[cfg(test)]
 mod tests {
     use crate::protowire;
-    use itertools::Itertools;
     use celenium_consensus_core::{block::Block, errors::header::CompressedParentsError, header::Header};
     use celenium_rpc_core::{RpcBlock, RpcError, RpcHash, RpcHeader};
+    use itertools::Itertools;
 
     fn new_unique() -> RpcHash {
         use std::sync::atomic::{AtomicU64, Ordering};

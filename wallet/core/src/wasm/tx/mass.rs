@@ -1,11 +1,11 @@
 use crate::result::Result;
 use crate::tx::{MAXIMUM_STANDARD_TRANSACTION_MASS, mass};
-use js_sys::Array;
 use celenium_consensus_client::*;
 use celenium_consensus_core::config::params::Params;
 use celenium_consensus_core::mass::{UtxoCell, calc_storage_mass};
 use celenium_consensus_core::network::{NetworkId, NetworkIdT};
 use celenium_wasm_core::types::NumberArray;
+use js_sys::Array;
 use wasm_bindgen::prelude::*;
 use workflow_wasm::convert::*;
 

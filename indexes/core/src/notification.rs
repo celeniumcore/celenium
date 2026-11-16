@@ -1,5 +1,4 @@
 use crate::indexed_utxos::{UtxoChanges, UtxoSetByScriptPublicKey};
-use derive_more::Display;
 use celenium_notify::{
     events::EventType,
     full_featured,
@@ -10,6 +9,7 @@ use celenium_notify::{
         single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
     },
 };
+use derive_more::Display;
 use std::{collections::HashMap, sync::Arc};
 
 full_featured! {

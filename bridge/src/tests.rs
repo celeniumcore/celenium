@@ -1154,8 +1154,9 @@ mod integration {
         };
 
         // Start the bridge server (with a timeout to prevent hanging)
-        let bridge_handle =
-            tokio::spawn(async move { listen_and_serve_with_shutdown::<CeleniumApi>(bridge_config, celenium_api, None, shutdown_rx).await });
+        let bridge_handle = tokio::spawn(async move {
+            listen_and_serve_with_shutdown::<CeleniumApi>(bridge_config, celenium_api, None, shutdown_rx).await
+        });
 
         // Give it a moment to start
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -1247,8 +1248,9 @@ mod integration {
         };
 
         // Start the bridge server
-        let bridge_handle =
-            tokio::spawn(async move { listen_and_serve_with_shutdown::<CeleniumApi>(bridge_config, celenium_api, None, shutdown_rx).await });
+        let bridge_handle = tokio::spawn(async move {
+            listen_and_serve_with_shutdown::<CeleniumApi>(bridge_config, celenium_api, None, shutdown_rx).await
+        });
 
         // Give it a moment to start
         tokio::time::sleep(Duration::from_millis(200)).await;

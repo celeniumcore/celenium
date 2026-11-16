@@ -3,7 +3,7 @@ use crate::mempool::{
     errors::{NonStandardError, NonStandardResult},
 };
 use celenium_consensus_core::{
-    constants::{MAX_SCRIPT_PUBLIC_KEY_VERSION, MAX_PRADHA},
+    constants::{MAX_PRADHA, MAX_SCRIPT_PUBLIC_KEY_VERSION},
     tx::MutableTransaction,
 };
 use celenium_txscript::{p2sh_sig_scanner, script_class::ScriptClass};

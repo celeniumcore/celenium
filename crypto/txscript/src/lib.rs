@@ -43,7 +43,6 @@ use crate::data_stack::{Stack, StackEntry};
 use crate::opcodes::{OpCodeImplementation, deserialize_next_opcode};
 use crate::zk_precompiles::compute_zk_cost;
 use crate::zk_precompiles::tags::ZkTag;
-use itertools::Itertools;
 use celenium_consensus_core::hashing::sighash::{
     SigHashReusedValues, SigHashReusedValuesUnsync, calc_ecdsa_signature_hash, calc_schnorr_signature_hash,
 };
@@ -53,6 +52,7 @@ use celenium_consensus_core::tx::{PopulatedTransaction, ScriptPublicKey, Transac
 use celenium_hashes::Hash;
 use celenium_txscript_errors::{Secp256k1Error, TxScriptError};
 use celenium_utils::hex::ToHex;
+use itertools::Itertools;
 use log::trace;
 use opcodes::codes::OpReturn;
 use opcodes::{OpCond, codes, to_small_int};

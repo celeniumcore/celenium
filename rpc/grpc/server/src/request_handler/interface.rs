@@ -37,7 +37,9 @@ impl Interface {
                 match celeniumd_request.payload {
                     Some(ref request) => Ok(CeleniumdResponse {
                         id: celeniumd_request.id,
-                        payload: Some(CeleniumdPayloadOps::from(request).to_error_response(GrpcServerError::MethodNotImplemented.into())),
+                        payload: Some(
+                            CeleniumdPayloadOps::from(request).to_error_response(GrpcServerError::MethodNotImplemented.into()),
+                        ),
                     }),
                     None => Err(GrpcServerError::InvalidRequestPayload),
                 }

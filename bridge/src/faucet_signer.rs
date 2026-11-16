@@ -40,16 +40,14 @@ pub enum SignerError {
 impl std::fmt::Display for SignerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SignerError::NoKeyConfigured => write!(
-                f,
-                "faucet signer key not configured (set CELENIUM_FAUCET_PRIVKEY or CELENIUM_FAUCET_KEYFILE)"
-            ),
+            SignerError::NoKeyConfigured => {
+                write!(f, "faucet signer key not configured (set CELENIUM_FAUCET_PRIVKEY or CELENIUM_FAUCET_KEYFILE)")
+            }
             SignerError::BadKeyFile(e) => write!(f, "cannot read faucet key file: {e}"),
             SignerError::BadSecret(e) => write!(f, "invalid faucet private key: {e}"),
-            SignerError::AddressMismatch { derived, configured } => write!(
-                f,
-                "faucet key derives address {derived} but config faucet_address is {configured}"
-            ),
+            SignerError::AddressMismatch { derived, configured } => {
+                write!(f, "faucet key derives address {derived} but config faucet_address is {configured}")
+            }
         }
     }
 }
@@ -81,8 +79,8 @@ impl FaucetSigner {
             secret.try_into().map_err(|v: Vec<u8>| SignerError::BadSecret(format!("expected 32 bytes, got {}", v.len())))?;
 
         let secp = Secp256k1::new();
-        let keypair =
-            Keypair::from_seckey_slice(&secp, &secret).map_err(|e| SignerError::BadSecret(format!("not a valid secp256k1 secret: {e}")))?;
+        let keypair = Keypair::from_seckey_slice(&secp, &secret)
+            .map_err(|e| SignerError::BadSecret(format!("not a valid secp256k1 secret: {e}")))?;
         let (xonly, _parity) = keypair.x_only_public_key();
         let address = Address::new(Prefix::Mainnet, Version::PubKey, &xonly.serialize()).to_string();
 
@@ -105,10 +103,7 @@ impl FaucetSigner {
         if configured.trim() == self.address {
             Ok(())
         } else {
-            Err(SignerError::AddressMismatch {
-                derived: self.address.clone(),
-                configured: configured.trim().to_string(),
-            })
+            Err(SignerError::AddressMismatch { derived: self.address.clone(), configured: configured.trim().to_string() })
         }
     }
 }

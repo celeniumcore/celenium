@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::{
     handler::RequestHandler,
     handler_trait::Handler,
-    interface::{Interface, CeleniumdMethod, CeleniumdRoutingPolicy},
+    interface::{CeleniumdMethod, CeleniumdRoutingPolicy, Interface},
     method::Method,
 };
 use crate::{

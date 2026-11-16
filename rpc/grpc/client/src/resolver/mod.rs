@@ -1,9 +1,9 @@
 use super::error::Result;
-use core::fmt::Debug;
 use celenium_grpc_core::{
     ops::CeleniumdPayloadOps,
     protowire::{CeleniumdRequest, CeleniumdResponse},
 };
+use core::fmt::Debug;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::oneshot;
 

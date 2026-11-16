@@ -18,10 +18,10 @@ use super::{
 };
 use async_channel::Sender;
 use async_trait::async_trait;
+use celenium_core::{debug, trace};
 use core::fmt::Debug;
 use futures::future::join_all;
 use itertools::Itertools;
-use celenium_core::{debug, trace};
 use parking_lot::Mutex;
 use std::{
     collections::{HashMap, hash_map::Entry},

@@ -17,9 +17,9 @@ pub mod sync;
 
 pub use balance::Balance;
 pub use binding::UtxoContextBinding;
+pub use celenium_consensus_client::UtxoEntryId;
 pub use context::{UtxoContext, UtxoContextId};
 pub use iterator::UtxoIterator;
-pub use celenium_consensus_client::UtxoEntryId;
 pub use outgoing::OutgoingTransaction;
 pub use pending::PendingUtxoEntryReference;
 pub use processor::UtxoProcessor;

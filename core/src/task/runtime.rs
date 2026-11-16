@@ -1,9 +1,9 @@
 use crate::{signals::Shutdown, task::service::AsyncServiceResult};
-use futures_util::future::{select_all, try_join_all};
 use celenium_core::core::Core;
 use celenium_core::service::Service;
 use celenium_core::task::service::AsyncService;
 use celenium_core::trace;
+use futures_util::future::{select_all, try_join_all};
 use std::{
     sync::{Arc, Mutex},
     thread::{self, JoinHandle as ThreadJoinHandle},

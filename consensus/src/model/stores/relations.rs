@@ -1,5 +1,3 @@
-use hashbrown::hash_map::Entry;
-use itertools::Itertools;
 use celenium_consensus_core::BlockHashSet;
 use celenium_consensus_core::{BlockHashMap, BlockHasher, BlockLevel, blockhash::BlockHashes};
 use celenium_database::prelude::{BatchDbWriter, CachePolicy, DbWriter};
@@ -9,6 +7,8 @@ use celenium_database::prelude::{DirectWriter, MemoryWriter};
 use celenium_database::prelude::{ReadLock, StoreError};
 use celenium_database::registry::{DatabaseStorePrefixes, SEPARATOR};
 use celenium_hashes::Hash;
+use hashbrown::hash_map::Entry;
+use itertools::Itertools;
 use rocksdb::WriteBatch;
 use std::iter::once;
 use std::sync::Arc;

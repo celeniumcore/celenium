@@ -4,13 +4,13 @@ use crate::pb::{
     CeleniumdMessage, p2p_client::P2pClient as ProtoP2pClient, p2p_server::P2p as ProtoP2p, p2p_server::P2pServer as ProtoP2pServer,
 };
 use crate::{ConnectionInitializer, Router};
-use futures::FutureExt;
 use celenium_core::{debug, info, warn};
 use celenium_utils::networking::NetAddress;
 use celenium_utils_tower::{
     counters::TowerConnectionCounters,
     middleware::{CountBytesBody, MapRequestBodyLayer, MapResponseBodyLayer, ServiceBuilder},
 };
+use futures::FutureExt;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::net::{IpAddr, ToSocketAddrs};

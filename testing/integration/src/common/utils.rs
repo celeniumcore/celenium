@@ -1,5 +1,4 @@
 use super::{client::ListeningClient, fee};
-use itertools::Itertools;
 use celenium_addresses::Address;
 use celenium_consensus_core::{
     constants::{TX_VERSION, TX_VERSION_TOCCATA},
@@ -20,6 +19,7 @@ use celenium_core::info;
 use celenium_grpc_client::GrpcClient;
 use celenium_rpc_core::{BlockAddedNotification, Notification, RpcUtxoEntry, VirtualDaaScoreChangedNotification, api::rpc::RpcApi};
 use celenium_txscript::pay_to_address_script;
+use itertools::Itertools;
 use rand::{Rng, thread_rng};
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use secp256k1::Keypair;

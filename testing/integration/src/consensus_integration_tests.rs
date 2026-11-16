@@ -49,7 +49,9 @@ use celenium_core::time::unix_now;
 use celenium_database::utils::get_celenium_tempdir;
 use celenium_hashes::{Hash, SeqCommitActiveNode};
 use celenium_rpc_core::RpcHeader;
-use celenium_seq_commit::hashing::{activity_digest_lane, activity_leaf, lane_key, lane_tip_next, mergeset_context_hash, smt_leaf_hash};
+use celenium_seq_commit::hashing::{
+    activity_digest_lane, activity_leaf, lane_key, lane_tip_next, mergeset_context_hash, smt_leaf_hash,
+};
 use celenium_seq_commit::types::{LaneTipInput, MergesetContext, SmtLeafInput};
 use celenium_seq_commit::verify::{SmtMetadata, verify_smt_metadata};
 use celenium_txscript::{MAX_SCRIPT_ELEMENT_SIZE, pay_to_script_hash_script};
@@ -57,9 +59,6 @@ use celenium_utils::arc::ArcExtensions;
 
 use crate::common;
 use crate::common::json::{json_line_to_block, json_line_to_trusted_block, json_line_to_utxo_pairs};
-use flate2::read::GzDecoder;
-use futures_util::future::try_join_all;
-use itertools::Itertools;
 use celenium_consensus_core::hashing::sighash::calc_schnorr_signature_hash;
 use celenium_consensus_core::muhash::MuHashExtensions;
 use celenium_consensus_core::{
@@ -91,6 +90,9 @@ use celenium_txscript::{
 use celenium_txscript_errors::TxScriptError;
 use celenium_utxoindex::UtxoIndex;
 use celenium_utxoindex::api::{UtxoIndexApi, UtxoIndexProxy};
+use flate2::read::GzDecoder;
+use futures_util::future::try_join_all;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering, max};
 use std::collections::HashSet;

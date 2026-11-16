@@ -9,9 +9,7 @@
 use std::str::FromStr;
 
 use celenium_addresses::{Address, Prefix, Version};
-use celenium_bip32::{
-    DerivationPath, ExtendedPrivateKey, Language, Mnemonic, SecretKey, WordCount,
-};
+use celenium_bip32::{DerivationPath, ExtendedPrivateKey, Language, Mnemonic, SecretKey, WordCount};
 use secp256k1::Secp256k1;
 
 fn hex32(b: &[u8; 32]) -> String {
@@ -44,8 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let s = receive_secret(&m, 1)?;
     let a = address_of(&s, Prefix::Testnet);
     assert_eq!(
-        a,
-        "cen69test:qrc2959g0pqda53glnfd238cdnmk24zxzkj8n5x83rkktx4h73dkcqjkk5zdg",
+        a, "cen69test:qrc2959g0pqda53glnfd238cdnmk24zxzkj8n5x83rkktx4h73dkcqjkk5zdg",
         "manual BIP32 path disagrees with wallet's own derivation"
     );
     println!("[VECTOR] manual path m/44'/111111'/0'/0/1 matches known testnet address -> OK");

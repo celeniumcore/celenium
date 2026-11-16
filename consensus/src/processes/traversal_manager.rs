@@ -4,7 +4,6 @@ use crate::model::{
     services::reachability::{MTReachabilityService, ReachabilityService},
     stores::{ghostdag::GhostdagStoreReader, reachability::ReachabilityStoreReader, relations::RelationsStoreReader},
 };
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashSet, ChainPath,
     blockhash::BlockHashExtensions,
@@ -12,6 +11,7 @@ use celenium_consensus_core::{
 };
 use celenium_core::trace;
 use celenium_hashes::Hash;
+use itertools::Itertools;
 
 #[derive(Clone)]
 pub struct DagTraversalManager<T: GhostdagStoreReader, U: ReachabilityStoreReader, V: RelationsStoreReader> {

@@ -6,10 +6,10 @@
 use crate::error::Error;
 use crate::imports::*;
 use crate::parents::CompressedParents as WasmCompressedParents;
-use js_sys::Object;
 use celenium_consensus_core::BlueWorkType;
 use celenium_hashes::Hash;
 use celenium_utils::hex::ToHex;
+use js_sys::Object;
 use workflow_wasm::extensions::{JsValueExtension, ObjectExtension};
 
 #[wasm_bindgen(typescript_custom_section)]

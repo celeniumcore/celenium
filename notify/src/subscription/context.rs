@@ -83,11 +83,11 @@ mod tests {
         address::tracker::{CounterMap, Index, IndexSet, Indexer, RefCount},
         subscription::SubscriptionContext,
     };
-    use itertools::Itertools;
     use celenium_addresses::{Address, Prefix};
     use celenium_alloc::init_allocator_with_default_settings;
     use celenium_core::trace;
     use celenium_math::Uint256;
+    use itertools::Itertools;
     use std::collections::{HashMap, HashSet};
     use workflow_perf_monitor::mem::get_process_memory_info;
 

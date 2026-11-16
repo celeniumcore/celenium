@@ -1,7 +1,6 @@
 mod error;
 mod result;
 
-use clap::Parser;
 use celenium_consensus_core::network::NetworkType;
 use celenium_rpc_core::api::ops::RpcApiOps;
 use celenium_wrpc_server::{
@@ -10,6 +9,7 @@ use celenium_wrpc_server::{
     server::Server,
     service::{CeleniumRpcHandler, Options},
 };
+use clap::Parser;
 use result::Result;
 use std::sync::Arc;
 use workflow_log::*;

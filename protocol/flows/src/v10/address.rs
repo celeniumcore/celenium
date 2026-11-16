@@ -1,5 +1,4 @@
 use crate::{flow_context::FlowContext, flow_trait::Flow};
-use itertools::Itertools;
 use celenium_addressmanager::NetAddress;
 use celenium_p2p_lib::{
     IncomingRoute, Router,
@@ -8,6 +7,7 @@ use celenium_p2p_lib::{
     pb::{AddressesMessage, RequestAddressesMessage, celeniumd_message::Payload},
 };
 use celenium_utils::networking::IpAddress;
+use itertools::Itertools;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
 

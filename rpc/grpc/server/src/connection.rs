@@ -4,12 +4,11 @@ use crate::{
     manager::ManagerEvent,
     request_handler::{
         factory::Factory,
-        interface::{Interface, CeleniumdRoutingPolicy},
+        interface::{CeleniumdRoutingPolicy, Interface},
         method::RoutingPolicy,
     },
 };
 use async_channel::{Receiver as MpmcReceiver, Sender as MpmcSender, TrySendError as MpmcTrySendError, bounded};
-use itertools::Itertools;
 use celenium_core::{debug, info, trace, warn};
 use celenium_grpc_core::{
     ops::CeleniumdPayloadOps,
@@ -22,6 +21,7 @@ use celenium_notify::{
     notifier::Notifier,
 };
 use celenium_rpc_core::Notification;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use std::{
     collections::{HashMap, hash_map::Entry},

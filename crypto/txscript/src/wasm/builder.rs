@@ -251,8 +251,8 @@ impl ScriptBuilder {
 mod tests {
     use super::{ScriptBuilder, ScriptBuilderOptions};
     use crate::wasm::Opcodes;
-    use js_sys::{Object, Reflect, Uint8Array};
     use celenium_wasm_core::types::BinaryT;
+    use js_sys::{Object, Reflect, Uint8Array};
     use wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
 

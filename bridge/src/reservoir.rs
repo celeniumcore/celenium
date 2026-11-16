@@ -79,10 +79,7 @@ impl ReservoirController {
 
 /// Detik Unix sekarang.
 fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -140,10 +137,7 @@ mod tests {
         let mut c = ReservoirController::new(cfg());
         for balance in [0u64, 1_000_000_000, 100_000_000_000_000] {
             let cut = c.update_at(balance, NOW);
-            assert!(
-                cut <= emission_policy::MAX_CUT_FRACTION,
-                "cut {cut} melewati plafon"
-            );
+            assert!(cut <= emission_policy::MAX_CUT_FRACTION, "cut {cut} melewati plafon");
         }
     }
 

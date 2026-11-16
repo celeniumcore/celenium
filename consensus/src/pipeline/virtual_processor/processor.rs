@@ -83,10 +83,10 @@ use once_cell::unsync::Lazy;
 
 use super::bounds::SeqCommitBounds;
 use super::errors::{PruningImportError, PruningImportResult};
-use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
-use itertools::Itertools;
 use celenium_consensus_core::tx::ValidatedTransaction;
 use celenium_utils::binary_heap::BinaryHeapExtensions;
+use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
+use itertools::Itertools;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use rand::{Rng, seq::SliceRandom};
 use rayon::{
@@ -655,7 +655,9 @@ impl VirtualStateProcessor {
             activity_digest_lane, activity_leaf, activity_root_hash, lane_key, lane_tip_next, mergeset_context_hash,
             miner_payload_leaf, miner_payload_root, payload_and_context_digest, seq_commit, seq_state_root, smt_leaf_hash,
         };
-        use celenium_seq_commit::types::{LaneTipInput, MergesetContext, MinerPayloadLeafInput, SeqCommitInput, SeqState, SmtLeafInput};
+        use celenium_seq_commit::types::{
+            LaneTipInput, MergesetContext, MinerPayloadLeafInput, SeqCommitInput, SeqState, SmtLeafInput,
+        };
         use celenium_smt::SmtHasher;
 
         let blue_score = ghostdag_data.blue_score;

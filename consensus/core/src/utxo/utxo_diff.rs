@@ -3,9 +3,9 @@ use super::{
     utxo_error::{UtxoAlgebraError, UtxoResult},
 };
 use crate::tx::{TransactionOutpoint, UtxoEntry, VerifiableTransaction};
-use hashbrown::hash_map::Entry::Vacant;
 #[cfg(feature = "mem_size")]
 use celenium_utils::mem_size::MemSizeEstimator;
+use hashbrown::hash_map::Entry::Vacant;
 use serde::{Deserialize, Serialize};
 
 pub trait ImmutableUtxoDiff {

@@ -1,11 +1,11 @@
 use super::process_queue::ProcessQueue;
-use itertools::Itertools;
 use celenium_consensus_core::tx::TransactionId;
 use celenium_core::debug;
 use celenium_p2p_lib::{
     Hub, make_message,
-    pb::{InvTransactionsMessage, CeleniumdMessage, celeniumd_message::Payload},
+    pb::{CeleniumdMessage, InvTransactionsMessage, celeniumd_message::Payload},
 };
+use itertools::Itertools;
 use std::time::{Duration, Instant};
 
 /// Interval between mempool scanning tasks (in seconds)

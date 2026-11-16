@@ -203,7 +203,9 @@ pub fn diff_to_hash(diff: f64) -> f64 {
 /// This creates the pre-PoW hash (hash WITHOUT timestamp and nonce)
 /// Uses celenium_hashes::BlockHash to match the working stratum implementation
 /// Returns the Hash type directly (not bytes) to match working stratum code
-pub fn serialize_block_header(block: &celenium_consensus_core::block::Block) -> Result<celenium_hashes::Hash, Box<dyn std::error::Error>> {
+pub fn serialize_block_header(
+    block: &celenium_consensus_core::block::Block,
+) -> Result<celenium_hashes::Hash, Box<dyn std::error::Error>> {
     let header = &block.header;
     let mut hasher = BlockHash::new();
 

@@ -1,8 +1,8 @@
-use clap::Parser;
-use futures_util::future::try_join_all;
 use celenium_alloc::init_allocator_with_default_settings;
 use celenium_stratum_bridge::log_colors::LogColors;
 use celenium_stratum_bridge::{CeleniumApi, StratumServerBridgeConfig as StratumBridgeConfig, listen_and_serve_with_shutdown, prom};
+use clap::Parser;
+use futures_util::future::try_join_all;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 #[cfg(windows)]
@@ -27,9 +27,9 @@ mod tracing_setup;
 #[cfg(test)]
 mod tests;
 
+use celenium_stratum_bridge::BridgeConfig;
 use cli::{Cli, NodeMode, apply_cli_overrides};
 use inprocess_node::InProcessNode;
-use celenium_stratum_bridge::BridgeConfig;
 
 static CONFIG_LOADED_FROM: OnceLock<Option<PathBuf>> = OnceLock::new();
 static REQUESTED_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -297,10 +297,8 @@ async fn main() -> Result<(), anyhow::Error> {
         // Off-chain faucet ledger (participation balances). Loaded from disk so
         // claims survive a bridge restart; on-chain settlement is separate.
         let faucet_state = Arc::new(std::sync::Mutex::new(
-            celenium_stratum_bridge::FaucetState::load(std::path::Path::new(
-                celenium_stratum_bridge::FAUCET_LEDGER_PATH,
-            ))
-            .unwrap_or_default(),
+            celenium_stratum_bridge::FaucetState::load(std::path::Path::new(celenium_stratum_bridge::FAUCET_LEDGER_PATH))
+                .unwrap_or_default(),
         ));
         prom::set_faucet_state(faucet_state);
 
@@ -312,9 +310,7 @@ async fn main() -> Result<(), anyhow::Error> {
         match celenium_stratum_bridge::FaucetSigner::from_env() {
             Ok(signer) => {
                 if let Some(configured) = &faucet_address {
-                    signer
-                        .ensure_matches(configured)
-                        .map_err(|e| anyhow::anyhow!("Faucet key/config mismatch: {e}"))?;
+                    signer.ensure_matches(configured).map_err(|e| anyhow::anyhow!("Faucet key/config mismatch: {e}"))?;
                 } else {
                     tracing::warn!(
                         "Faucet key is configured but faucet_address is empty in config; withdrawals stay disabled until faucet_address is set"

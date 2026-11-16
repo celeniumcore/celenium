@@ -11,9 +11,9 @@ use celenium_database::{
 };
 use celenium_hashes::Hash;
 
+use celenium_utils::mem_size::MemSizeEstimator;
 use hashbrown::hash_map::Entry::{Occupied, Vacant};
 use itertools::Itertools;
-use celenium_utils::mem_size::MemSizeEstimator;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 use rocksdb::WriteBatch;
 use serde::{Deserialize, Serialize};

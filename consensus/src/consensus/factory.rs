@@ -1,7 +1,6 @@
 use super::utxo_set_override::{set_genesis_utxo_commitment_from_config, set_initial_utxo_set};
 use super::{Consensus, ctl::Ctl};
 use crate::{model::stores::U64Key, pipeline::ProcessingCounters};
-use itertools::Itertools;
 use celenium_consensus_core::{api::ConsensusApi, config::Config, mining_rules::MiningRules};
 use celenium_consensus_notify::root::ConsensusNotificationRoot;
 use celenium_consensusmanager::{ConsensusFactory, ConsensusInstance, DynConsensusCtl, SessionLock};
@@ -13,6 +12,7 @@ use celenium_database::{
     },
     registry::DatabaseStorePrefixes,
 };
+use itertools::Itertools;
 
 use celenium_txscript::caches::TxScriptCacheCounters;
 use celenium_utils::mem_size::MemSizeEstimator;

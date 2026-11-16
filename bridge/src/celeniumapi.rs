@@ -8,7 +8,8 @@ use celenium_notify::{listener::ListenerId, scope::NewBlockTemplateScope};
 use celenium_rpc_core::notify::mode::NotificationMode;
 use celenium_rpc_core::{
     GetBlockDagInfoRequest, GetBlockTemplateRequest, GetConnectedPeerInfoRequest, GetCurrentBlockColorRequest, GetFeeEstimateRequest,
-    GetInfoRequest, GetServerInfoRequest, Notification, RpcHash, RpcRawBlock, SubmitBlockRequest, SubmitBlockResponse, api::rpc::RpcApi,
+    GetInfoRequest, GetServerInfoRequest, Notification, RpcHash, RpcRawBlock, SubmitBlockRequest, SubmitBlockResponse,
+    api::rpc::RpcApi,
 };
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -821,7 +822,7 @@ impl CeleniumApi {
         use celenium_consensus_core::sign;
         use celenium_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
         use celenium_consensus_core::tx::{
-            SignableTransaction, Transaction, TransactionInput, TransactionOutput, TransactionOutpoint, UtxoEntry,
+            SignableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry,
         };
         use celenium_txscript::standard::pay_to_address_script;
 
@@ -832,8 +833,7 @@ impl CeleniumApi {
         const COINBASE_MATURITY_DAA: u64 = 1000;
 
         let secret = hex::decode(private_key_hex.trim().trim_start_matches("0x")).context("secret is not valid hex")?;
-        let secret: [u8; 32] =
-            secret.try_into().map_err(|v: Vec<u8>| anyhow::anyhow!("secret must be 32 bytes, got {}", v.len()))?;
+        let secret: [u8; 32] = secret.try_into().map_err(|v: Vec<u8>| anyhow::anyhow!("secret must be 32 bytes, got {}", v.len()))?;
 
         let source = Address::try_from(from_address).map_err(|e| anyhow::anyhow!("bad from-address: {e}"))?;
         let dest = Address::try_from(to_address).map_err(|e| anyhow::anyhow!("bad to-address: {e}"))?;
@@ -869,11 +869,7 @@ impl CeleniumApi {
                 break;
             }
             let entry: UtxoEntry = u.utxo_entry.clone().into();
-            let mature = if entry.is_coinbase {
-                entry.block_daa_score.saturating_add(COINBASE_MATURITY_DAA) <= daa
-            } else {
-                true
-            };
+            let mature = if entry.is_coinbase { entry.block_daa_score.saturating_add(COINBASE_MATURITY_DAA) <= daa } else { true };
             if mature {
                 selected_total = selected_total.saturating_add(entry.amount);
                 selected_inputs.push((u.outpoint.into(), entry));
@@ -895,15 +891,7 @@ impl CeleniumApi {
 
         let payment_output = TransactionOutput::new(amount_pradha, dest_script);
         let change_output = TransactionOutput::new(change, source_script);
-        let tx = Transaction::new(
-            TX_VERSION,
-            inputs,
-            vec![payment_output, change_output],
-            0,
-            SUBNETWORK_ID_NATIVE,
-            0,
-            vec![],
-        );
+        let tx = Transaction::new(TX_VERSION, inputs, vec![payment_output, change_output], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
 
         let signable = SignableTransaction::with_entries(tx, entries);
         let signed = match sign::sign_with_multiple_v2(signable, &[secret]) {
@@ -940,22 +928,16 @@ impl CeleniumApi {
     /// the exact minimum at submit, so over-estimating is safe (the excess comes
     /// back as change) while under-estimating is not.
     pub async fn estimate_standard_fee(&self) -> Result<u64> {
-        /// Conservative mass for a standard two-output transfer, in grams.
-        const STANDARD_TRANSFER_MASS: f64 = 2500.0;
+        /// Mass for a standard 1-input, 2-output transfer, in grams.
+        /// A conservative default (not hard minimum) to size the fee estimate
+        /// returned to clients; the node enforces the exact minimum at submit.
+        const STANDARD_TRANSFER_MASS: f64 = 1100.0;
         /// Fallback feerate (pradha/gram) when the estimator returns no bucket.
-        const FALLBACK_FEERATE: f64 = 10.0;
+        /// Matches the node's minimum relay policy (250 pradha/kg = 0.25 pradha/gram).
+        const FALLBACK_FEERATE: f64 = 0.25;
 
-        let response = self
-            .client
-            .get_fee_estimate_call(None, GetFeeEstimateRequest {})
-            .await
-            .context("get_fee_estimate failed")?;
-        let feerate = response
-            .estimate
-            .low_buckets
-            .first()
-            .map(|bucket| bucket.feerate)
-            .unwrap_or(FALLBACK_FEERATE);
+        let response = self.client.get_fee_estimate_call(None, GetFeeEstimateRequest {}).await.context("get_fee_estimate failed")?;
+        let feerate = response.estimate.low_buckets.first().map(|bucket| bucket.feerate).unwrap_or(FALLBACK_FEERATE);
         Ok((feerate * STANDARD_TRANSFER_MASS).ceil() as u64)
     }
 

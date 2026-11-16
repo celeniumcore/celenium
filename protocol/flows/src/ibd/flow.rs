@@ -3,8 +3,6 @@ use crate::{
     flow_trait::Flow,
     ibd::{HeadersChunkStream, TrustedEntryStream, negotiate::ChainNegotiationOutput},
 };
-use futures::future::{Either, join_all, select, try_join_all};
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashSet,
     api::BlockValidationFuture,
@@ -28,6 +26,8 @@ use celenium_p2p_lib::{
     },
 };
 use celenium_utils::channel::JobReceiver;
+use futures::future::{Either, join_all, select, try_join_all};
+use itertools::Itertools;
 use std::{
     sync::Arc,
     time::{Duration, Instant},

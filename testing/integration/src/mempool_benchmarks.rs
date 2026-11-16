@@ -9,8 +9,6 @@ use crate::{
     },
     tasks::{Stopper, TasksRunner, block::group::MinerGroupTask, daemon::DaemonTask, tx::group::TxSenderGroupTask},
 };
-use futures_util::future::join_all;
-use itertools::Itertools;
 use celenium_addresses::Address;
 use celenium_consensus::params::Params;
 use celenium_consensus_core::{
@@ -41,6 +39,8 @@ use celenium_txscript::{
 };
 use celenium_utils::fd_budget;
 use celeniumd_lib::args::Args;
+use futures_util::future::join_all;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use rand::thread_rng;
 use rand_distr::{Distribution, Exp};

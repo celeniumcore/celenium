@@ -2,8 +2,8 @@
 use alloc::sync::Arc;
 #[cfg(feature = "sighash-sync")]
 use arc_swap::ArcSwapOption;
-use core::cell::Cell;
 use celenium_hashes::{Hash, Hasher, HasherBase, TransactionSigningHash, TransactionSigningHashECDSA, ZERO_HASH};
+use core::cell::Cell;
 
 use crate::tx::{ScriptPublicKey, Transaction, TransactionOutpoint, TransactionOutput, VerifiableTransaction};
 

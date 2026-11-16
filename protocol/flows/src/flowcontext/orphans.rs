@@ -1,4 +1,3 @@
-use indexmap::{IndexMap, map::Entry::Occupied};
 use celenium_consensus_core::{
     api::{BlockValidationFuture, BlockValidationFutures},
     block::Block,
@@ -6,6 +5,7 @@ use celenium_consensus_core::{
 use celenium_consensusmanager::{BlockProcessingBatch, ConsensusProxy};
 use celenium_core::debug;
 use celenium_hashes::Hash;
+use indexmap::{IndexMap, map::Entry::Occupied};
 use rand::Rng;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -279,7 +279,6 @@ impl OrphanBlocksPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::future::try_join_all;
     use celenium_consensus_core::{
         api::{BlockValidationFutures, ConsensusApi},
         blockstatus::BlockStatus,
@@ -287,6 +286,7 @@ mod tests {
     };
     use celenium_consensusmanager::{ConsensusInstance, SessionLock};
     use celenium_core::assert_match;
+    use futures::future::try_join_all;
     use parking_lot::RwLock;
     use std::sync::Arc;
 

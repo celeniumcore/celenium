@@ -24,11 +24,9 @@ use celenium_pow::State;
 #[ignore]
 fn mine_genesis_nonces() {
     let cap: u64 = 2_000_000_000;
-    for (name, genesis) in [
-        ("SIMNET_GENESIS", &SIMNET_GENESIS),
-        ("TESTNET_GENESIS", &TESTNET_GENESIS),
-        ("DEVNET_GENESIS", &DEVNET_GENESIS),
-    ] {
+    for (name, genesis) in
+        [("SIMNET_GENESIS", &SIMNET_GENESIS), ("TESTNET_GENESIS", &TESTNET_GENESIS), ("DEVNET_GENESIS", &DEVNET_GENESIS)]
+    {
         println!("mining {name}...");
         let block: Block = genesis.into();
         let state = State::new(&block.header);
@@ -41,14 +39,8 @@ fn mine_genesis_nonces() {
             }
         }
         match nonce {
-            Some(n) => println!(
-                "{name}: nonce = {n} (0x{n:x}) dalam {:.1?}",
-                start.elapsed()
-            ),
-            None => println!(
-                "{name}: tidak ditemukan dalam {cap} percobaan ({:.1?}) — target terlalu sulit",
-                start.elapsed()
-            ),
+            Some(n) => println!("{name}: nonce = {n} (0x{n:x}) dalam {:.1?}", start.elapsed()),
+            None => println!("{name}: tidak ditemukan dalam {cap} percobaan ({:.1?}) — target terlalu sulit", start.elapsed()),
         }
     }
 }

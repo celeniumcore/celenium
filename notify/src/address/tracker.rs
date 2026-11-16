@@ -1,10 +1,10 @@
 use crate::address::error::{Error, Result};
-use indexmap::{IndexMap, map::Entry};
-use itertools::Itertools;
 use celenium_addresses::{Address, Prefix};
 use celenium_consensus_core::tx::ScriptPublicKey;
 use celenium_core::{debug, trace};
 use celenium_txscript::{extract_script_pub_key_address, pay_to_address_script};
+use indexmap::{IndexMap, map::Entry};
+use itertools::Itertools;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::{HashMap, HashSet, hash_map, hash_set},

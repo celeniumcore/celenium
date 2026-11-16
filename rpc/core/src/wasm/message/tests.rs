@@ -1,6 +1,6 @@
 use super::*;
-use js_sys::Reflect;
 use celenium_addresses::{Prefix, Version};
+use js_sys::Reflect;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen_test]

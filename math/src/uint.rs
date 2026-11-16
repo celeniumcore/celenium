@@ -1,5 +1,5 @@
 #[doc(hidden)]
-pub use {alloc::format, alloc::string::String, alloc::vec::Vec, faster_hex, celenium_utils, malachite_base, malachite_nz, serde};
+pub use {alloc::format, alloc::string::String, alloc::vec::Vec, celenium_utils, faster_hex, malachite_base, malachite_nz, serde};
 
 // Feature-gated impls for `construct_uint!` types. Each helper is a
 // cfg-selected pair, defined here, so the gate is evaluated against celenium-math's

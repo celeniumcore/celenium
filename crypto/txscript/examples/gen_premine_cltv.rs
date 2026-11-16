@@ -16,12 +16,12 @@
 
 use std::fmt::Write as _;
 
-use chrono::{TimeZone, Utc};
 use celenium_addresses::Prefix;
 use celenium_txscript::{
-    extract_script_pub_key_address, multisig_redeem_script, opcodes::codes::OpCheckLockTimeVerify,
-    pay_to_script_hash_script, script_builder::ScriptBuilder,
+    extract_script_pub_key_address, multisig_redeem_script, opcodes::codes::OpCheckLockTimeVerify, pay_to_script_hash_script,
+    script_builder::ScriptBuilder,
 };
+use chrono::{TimeZone, Utc};
 
 const K1: &str = "1b37ab3e285f75fcbbfbd589cb67f1eba0c73256ad2c988c6e332b302b2a3b8c";
 const K2: &str = "67d8ce2167a91cbabdc7b69a34c03b41afd3d020797dce8681c8b2bb3c30d434";
@@ -162,11 +162,7 @@ fn write_const(path: &str, outputs: &[Output]) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-fn write_schedule(
-    path: &str,
-    outputs: &[Output],
-    timestamps: &[u64],
-) -> Result<(), Box<dyn std::error::Error>> {
+fn write_schedule(path: &str, outputs: &[Output], timestamps: &[u64]) -> Result<(), Box<dyn std::error::Error>> {
     let mut s = String::with_capacity(64 * 1024);
     s.push_str("# CEN Premine — CLTV schedule\n\n");
     s.push_str("Auto-unlock on-chain every 5th of the month (UTC), 132 tranches per vault.\n");
@@ -182,16 +178,7 @@ fn write_schedule(
             let ms = o.ts_ms;
             // index into the shared timestamps array is the tranche index
             let _ = timestamps; // kept for clarity of ordering
-            let _ = write!(
-                s,
-                "| {} | {} | {} | {} | {} | {} |\n",
-                i + 1,
-                fmt_ms_date(ms),
-                ms,
-                o.amount,
-                cen_str(o.amount),
-                o.address
-            );
+            let _ = write!(s, "| {} | {} | {} | {} | {} | {} |\n", i + 1, fmt_ms_date(ms), ms, o.amount, cen_str(o.amount), o.address);
         }
     };
     write_vault(&mut s, "Dev vault (K1/K2/K3) — 9,600,000 CEN", &outputs[..TRANCHES]);

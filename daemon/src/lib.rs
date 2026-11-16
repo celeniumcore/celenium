@@ -1,15 +1,15 @@
+pub mod celeniumd;
 pub mod cpu_miner;
 pub mod error;
 pub mod imports;
-pub mod celeniumd;
 pub mod result;
 
 use std::fmt::Display;
 
 use crate::imports::*;
 pub use crate::result::Result;
-pub use cpu_miner::{CpuMiner, CpuMinerConfig, CpuMinerCtl};
 pub use celeniumd::{Celeniumd, CeleniumdConfig, CeleniumdCtl};
+pub use cpu_miner::{CpuMiner, CpuMinerConfig, CpuMinerCtl};
 use workflow_core::runtime;
 use workflow_node::process::Event as ProcessEvent;
 use workflow_store::fs::*;

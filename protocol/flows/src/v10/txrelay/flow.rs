@@ -246,7 +246,12 @@ impl RelayTransactionsFlow {
                         self.spam_counter += 1;
                     }
                     if self.spam_counter.is_multiple_of(100) {
-                        celenium_core::warn!("Peer {} has shared {} spam/non-standard txs ({:?})", self.router, self.spam_counter, res);
+                        celenium_core::warn!(
+                            "Peer {} has shared {} spam/non-standard txs ({:?})",
+                            self.router,
+                            self.spam_counter,
+                            res
+                        );
                     }
                 }
                 Err(_) => {}

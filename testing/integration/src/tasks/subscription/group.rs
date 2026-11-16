@@ -9,10 +9,10 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use itertools::{Itertools, chain};
 use celenium_addresses::Address;
 use celenium_notify::scope::Scope;
 use celenium_utils::triggers::SingleTrigger;
+use itertools::{Itertools, chain};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 

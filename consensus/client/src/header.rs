@@ -5,11 +5,11 @@
 #![allow(non_snake_case)]
 
 use crate::error::Error;
-use js_sys::{Array, Object};
 use celenium_consensus_core::hashing;
 use celenium_consensus_core::header as native;
 use celenium_hashes::Hash;
 use celenium_utils::hex::ToHex;
+use js_sys::{Array, Object};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::*;
 use wasm_bindgen::prelude::*;

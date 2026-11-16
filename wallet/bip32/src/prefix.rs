@@ -2,11 +2,11 @@
 
 use crate::{Error, ExtendedKey, Result, Version};
 use borsh::{BorshDeserialize, BorshSerialize};
+use celenium_consensus_core::network::{NetworkId, NetworkType};
 use core::{
     fmt::{self, Debug, Display},
     str,
 };
-use celenium_consensus_core::network::{NetworkId, NetworkType};
 
 /// BIP32 extended key prefixes a.k.a. "versions" (e.g. `xpub`, `xprv`)
 ///

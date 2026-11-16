@@ -3,13 +3,13 @@ use crate::model::{
     services::reachability::ReachabilityService,
     stores::{children::ChildrenStore, relations::RelationsStore},
 };
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashSet,
     blockhash::{BlockHashIteratorExtensions, BlockHashes, ORIGIN},
 };
 use celenium_database::prelude::{BatchDbWriter, DbWriter, DirectWriter, StoreError};
 use celenium_hashes::Hash;
+use itertools::Itertools;
 use rocksdb::WriteBatch;
 
 /// Initializes this relations store with an `origin` root

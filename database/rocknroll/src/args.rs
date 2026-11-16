@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use clap::Args;
 use celenium_consensus_core::network::NetworkId;
 use celeniumd_lib::args::Args as CeleniumdArgs;
+use clap::Args;
 
 use crate::{Error, Result};
 

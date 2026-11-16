@@ -6,7 +6,6 @@ use crate::flowcontext::{
 use crate::user_agent_rule::{UserAgentRuleRejectReason, UserAgentRuleSet};
 use crate::{v10, v11};
 use async_trait::async_trait;
-use futures::future::join_all;
 use celenium_addressmanager::AddressManager;
 use celenium_connectionmanager::ConnectionManager;
 use celenium_consensus_core::api::{BlockValidationFuture, BlockValidationFutures};
@@ -20,8 +19,8 @@ use celenium_consensus_notify::{
 };
 use celenium_consensusmanager::{BlockProcessingBatch, ConsensusInstance, ConsensusManager, ConsensusProxy, ConsensusSessionOwned};
 use celenium_core::{
-    debug, info,
     celeniumd_env::{name, version},
+    debug, info,
     task::tick::TickService,
 };
 use celenium_core::{time::unix_now, warn};
@@ -30,7 +29,7 @@ use celenium_mining::mempool::tx::{Orphan, Priority};
 use celenium_mining::{manager::MiningManagerProxy, mempool::tx::RbfPolicy};
 use celenium_notify::notifier::Notify;
 use celenium_p2p_lib::{
-    ConnectionInitializer, Hub, CeleniumdHandshake, PeerKey, PeerProperties, Router,
+    CeleniumdHandshake, ConnectionInitializer, Hub, PeerKey, PeerProperties, Router,
     common::ProtocolError,
     convert::model::version::Version,
     make_message,
@@ -39,6 +38,7 @@ use celenium_p2p_lib::{
 use celenium_p2p_mining::rule_engine::MiningRuleEngine;
 use celenium_utils::iter::IterExtensions;
 use celenium_utils::networking::PeerId;
+use futures::future::join_all;
 use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::time::Instant;

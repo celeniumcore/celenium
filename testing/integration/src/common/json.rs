@@ -1,7 +1,7 @@
-use itertools::Itertools;
 use celenium_consensus_core::block::Block;
 use celenium_consensus_core::trusted::TrustedBlock;
 use celenium_consensus_core::tx::{TransactionOutpoint, UtxoEntry};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 pub use celenium_consensus_core::trusted::ExternalGhostdagData as JtfGhostdagData;

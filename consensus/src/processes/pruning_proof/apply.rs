@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashMap, BlockHashSet, HashMapCustomHasher,
     blockhash::{BlockHashes, ORIGIN},
@@ -19,6 +18,7 @@ use celenium_database::prelude::StoreResultUnitExt;
 use celenium_hashes::Hash;
 use celenium_pow::calc_block_level;
 use celenium_utils::{binary_heap::BinaryHeapExtensions, vec::VecExtensions};
+use itertools::Itertools;
 use rocksdb::WriteBatch;
 
 use crate::{

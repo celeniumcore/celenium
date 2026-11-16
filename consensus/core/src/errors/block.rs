@@ -8,8 +8,8 @@ use crate::{
     subnets::SubnetworkId,
     tx::{TransactionId, TransactionOutpoint},
 };
-use itertools::Itertools;
 use celenium_hashes::Hash;
+use itertools::Itertools;
 use thiserror::Error;
 
 #[derive(Clone, Debug)]

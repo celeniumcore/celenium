@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::pb::{ReadyMessage, VerackMessage, VersionMessage, celeniumd_message::Payload};
-use crate::{IncomingRoute, CeleniumdMessagePayloadType, Router};
+use crate::{CeleniumdMessagePayloadType, IncomingRoute, Router};
 use crate::{common::ProtocolError, dequeue_with_timeout, make_message};
 use celenium_core::debug;
 

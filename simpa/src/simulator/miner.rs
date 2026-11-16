@@ -1,5 +1,3 @@
-use indexmap::IndexSet;
-use itertools::Itertools;
 use celenium_consensus::consensus::Consensus;
 use celenium_consensus::model::stores::virtual_state::VirtualStateStoreReader;
 use celenium_consensus::params::Params;
@@ -16,6 +14,8 @@ use celenium_consensus_core::tx::{
 use celenium_consensus_core::utxo::utxo_view::UtxoView;
 use celenium_core::trace;
 use celenium_utils::sim::{Environment, Process, Resumption, Suspension};
+use indexmap::IndexSet;
+use itertools::Itertools;
 use rand::{Rng, rngs::StdRng};
 use rand_distr::{Distribution, Exp};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};

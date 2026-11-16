@@ -1,5 +1,4 @@
 use crate::{flow_context::FlowContext, flow_trait::Flow, ibd::IBD_BATCH_SIZE};
-use itertools::Itertools;
 use celenium_consensus_core::errors::consensus::ConsensusError;
 use celenium_core::debug;
 use celenium_hashes::Hash;
@@ -8,9 +7,11 @@ use celenium_p2p_lib::{
     common::ProtocolError,
     dequeue, make_message,
     pb::{
-        DonePruningPointUtxoSetChunksMessage, PruningPointUtxoSetChunkMessage, UnexpectedPruningPointMessage, celeniumd_message::Payload,
+        DonePruningPointUtxoSetChunksMessage, PruningPointUtxoSetChunkMessage, UnexpectedPruningPointMessage,
+        celeniumd_message::Payload,
     },
 };
+use itertools::Itertools;
 use std::sync::Arc;
 
 pub struct RequestPruningPointUtxoSetFlow {

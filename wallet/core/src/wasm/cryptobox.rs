@@ -1,8 +1,8 @@
 use crate::cryptobox::CryptoBox as NativeCryptoBox;
 use crate::imports::*;
 use base64::{Engine as _, engine::general_purpose};
-use crypto_box::{KEY_SIZE, PublicKey, SecretKey};
 use celenium_wasm_core::types::BinaryT;
+use crypto_box::{KEY_SIZE, PublicKey, SecretKey};
 
 #[wasm_bindgen]
 extern "C" {

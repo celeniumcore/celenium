@@ -1,13 +1,13 @@
 use crate::tasks::Task;
 use async_channel::Sender;
 use async_trait::async_trait;
-use itertools::Itertools;
 use celenium_addresses::Address;
 use celenium_core::warn;
 use celenium_grpc_client::GrpcClient;
 use celenium_notify::scope::{Scope, UtxosChangedScope};
 use celenium_rpc_core::api::rpc::RpcApi;
 use celenium_utils::{channel::Channel, triggers::SingleTrigger};
+use itertools::Itertools;
 use parking_lot::Mutex;
 use rand::thread_rng;
 use rand_distr::{Distribution, Exp};

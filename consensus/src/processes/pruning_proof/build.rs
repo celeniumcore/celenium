@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashMap, BlockHashSet, BlockLevel, HashMapCustomHasher, KType,
     blockhash::{BlockHashes, ORIGIN},
@@ -16,6 +15,7 @@ use celenium_core::{debug, trace};
 use celenium_database::prelude::*;
 use celenium_hashes::Hash;
 use celenium_utils::binary_heap::TopK;
+use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{

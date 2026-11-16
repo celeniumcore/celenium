@@ -1,10 +1,10 @@
 #![allow(clippy::arithmetic_side_effects)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use celenium_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use celenium_consensus_core::tx::{
     ComputeCommit, ScriptPublicKey, Transaction, TransactionId, TransactionInput, TransactionOutpoint, TransactionOutput,
 };
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use smallvec::smallvec;
 use std::time::{Duration, Instant};
 

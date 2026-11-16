@@ -2,9 +2,7 @@
 use std::str::FromStr;
 
 use celenium_addresses::{Address, Prefix, Version};
-use celenium_bip32::{
-    DerivationPath, ExtendedPrivateKey, Language, Mnemonic, SecretKey, WordCount,
-};
+use celenium_bip32::{DerivationPath, ExtendedPrivateKey, Language, Mnemonic, SecretKey, WordCount};
 use secp256k1::Secp256k1;
 
 fn hex32(b: &[u8; 32]) -> String {

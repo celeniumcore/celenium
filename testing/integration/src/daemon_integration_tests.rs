@@ -1195,7 +1195,9 @@ async fn daemon_ibd_smt_state_sync_test() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn daemon_cleaning_test() {
     init_allocator_with_default_settings();
-    celenium_core::log::try_init_logger("info,celenium_grpc_core=trace,celenium_grpc_server=trace,celenium_grpc_client=trace,celenium_core=trace");
+    celenium_core::log::try_init_logger(
+        "info,celenium_grpc_core=trace,celenium_grpc_server=trace,celenium_grpc_client=trace,celenium_core=trace",
+    );
     let args = Args { devnet: true, ..Default::default() };
     let consensus_manager;
     let async_runtime;

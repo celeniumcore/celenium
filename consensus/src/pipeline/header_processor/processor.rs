@@ -27,8 +27,6 @@ use crate::{
     pipeline::deps_manager::{BlockProcessingMessage, BlockTask, BlockTaskDependencyManager, TaskId},
     processes::{ghostdag::ordering::SortableBlock, reachability::inquirer as reachability, relations::RelationsStoreExtensions},
 };
-use crossbeam_channel::{Receiver, Sender};
-use itertools::Itertools;
 use celenium_consensus_core::{
     BlockHashSet, BlockLevel,
     blockhash::{BlockHashes, ORIGIN},
@@ -40,6 +38,8 @@ use celenium_consensusmanager::SessionLock;
 use celenium_database::prelude::{StoreResultExt, StoreResultUnitExt};
 use celenium_hashes::Hash;
 use celenium_utils::vec::VecExtensions;
+use crossbeam_channel::{Receiver, Sender};
+use itertools::Itertools;
 use parking_lot::RwLock;
 use rayon::ThreadPool;
 use rocksdb::WriteBatch;

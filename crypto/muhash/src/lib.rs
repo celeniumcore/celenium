@@ -9,10 +9,10 @@ pub mod u3072;
 mod u3072;
 
 use crate::u3072::U3072;
-use core::error::Error;
-use core::fmt::Display;
 use celenium_hashes::{Hash, Hasher, HasherBase, MuHashElementHash, MuHashFinalizeHash};
 use celenium_math::Uint3072;
+use core::error::Error;
+use core::fmt::Display;
 use rand_chacha::ChaCha20Rng;
 use rand_chacha::rand_core::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
