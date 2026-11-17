@@ -89,6 +89,13 @@ mod tests {
     }
 
     #[test]
+    fn activation_boundary_counts_only_non_genesis_legacy_rewards() {
+        let activation = 1000;
+        let schedule = ActivationSchedule::new(activation).unwrap();
+        assert_eq!(schedule.cumulative(activation), (activation - 1) * FIRST_SUBSIDY);
+    }
+
+    #[test]
     fn partitioned_acceptance_intervals_conserve_emission_across_halvings() {
         let schedule = ActivationSchedule::new(1000).unwrap();
         let mut start = 1000;
