@@ -7,8 +7,8 @@ use std::path::Path;
 /// Kuota harian tetap dalam pradha (1 CEN = 100.000.000 pradha).
 pub const FAUCET_MAX_REWARD_PRADHA: u64 = 1_000;
 
-/// Batas keras kewajiban; runtime juga menuntut saldo matang untuk setiap kredit baru.
-pub const FAUCET_MAX_OUTSTANDING_PRADHA: u64 = 250_000_000_000_000;
+/// Plafon kewajiban klaim faucet: 500.000 CEN.
+pub const FAUCET_MAX_OUTSTANDING_PRADHA: u64 = 50_000_000_000_000;
 
 /// File tempat ledger faucet disimpan (relatif ke working directory bridge).
 pub const FAUCET_LEDGER_PATH: &str = "faucet_ledger.json";
@@ -242,24 +242,24 @@ impl FaucetState {
             return Err(ClaimError::InvalidAddress);
         }
         let funding = self.funding.filter(|f| f.is_fresh(now)).ok_or(ClaimError::FundingUnavailable)?;
-        let free = crate::reservoir_funds::available_for_claims(funding.mature_pradha, self.total_outstanding());
-        if payout > free {
-            return Err(ClaimError::FundingUnavailable);
-        }
         let day = now / DAY_SECS;
         // Jangan membuka ulang hari yang sudah dilewati setelah koreksi jam server.
         if day < self.claim_day || self.balance(address).is_some_and(|e| e.last_claim_day > day) {
             return Err(ClaimError::AlreadyClaimed);
         }
-        let daily_cap = self.daily_cap_at(now);
-        let used = if self.claim_day == day { self.claimed_today } else { 0 };
-        if used >= daily_cap || payout > daily_cap.saturating_sub(used) {
-            return Err(ClaimError::DailyCapReached);
-        }
         let cap = self.outstanding_cap_at(now);
         let outstanding = self.total_outstanding();
         if outstanding >= cap || payout > cap.saturating_sub(outstanding) {
             return Err(ClaimError::ReservoirFull);
+        }
+        let free = crate::reservoir_funds::available_for_claims(funding.mature_pradha, outstanding);
+        if payout > free {
+            return Err(ClaimError::FundingUnavailable);
+        }
+        let daily_cap = self.daily_cap_at(now);
+        let used = if self.claim_day == day { self.claimed_today } else { 0 };
+        if used >= daily_cap || payout > daily_cap.saturating_sub(used) {
+            return Err(ClaimError::DailyCapReached);
         }
         if payout == 0 {
             return Err(ClaimError::AlreadyClaimed);
@@ -480,8 +480,10 @@ impl FaucetState {
         if self.funding_budget_day != now / DAY_SECS {
             return 0;
         }
-        self.funding_daily_cap_pradha
-            .min(used.saturating_add(crate::reservoir_funds::available_for_claims(funding.mature_pradha, self.total_outstanding())))
+        let outstanding = self.total_outstanding();
+        let liability_headroom = self.outstanding_cap_at(now).saturating_sub(outstanding);
+        let free = crate::reservoir_funds::available_for_claims(funding.mature_pradha, outstanding);
+        self.funding_daily_cap_pradha.min(used.saturating_add(free.min(liability_headroom)))
     }
 
     /// Existing claims remain visible even when their backing falls below the liability cap.
@@ -489,13 +491,8 @@ impl FaucetState {
         self.outstanding_cap_at(Self::now_secs())
     }
 
-    fn outstanding_cap_at(&self, now: u64) -> u64 {
-        let Some(funding) = self.funding.filter(|f| f.is_fresh(now)) else { return self.total_outstanding() };
-        funding
-            .mature_pradha
-            .saturating_sub(crate::reservoir_funds::OPERATIONAL_BUFFER_PRADHA)
-            .min(FAUCET_MAX_OUTSTANDING_PRADHA)
-            .max(self.total_outstanding())
+    fn outstanding_cap_at(&self, _now: u64) -> u64 {
+        FAUCET_MAX_OUTSTANDING_PRADHA.max(self.total_outstanding())
     }
 
     pub fn update_funding(&mut self, mature_pradha: u64, month: u64, now: u64) {
@@ -757,12 +754,10 @@ mod tests {
     #[test]
     fn preview_stops_when_liability_cap_is_full() {
         let mut s = funded_state();
-        s.ledger.insert(
-            "existing-liability".into(),
-            FaucetEntry { balance_pradha: crate::emission_policy::claim_bucket_pradha(0), ..Default::default() },
-        );
+        s.ledger
+            .insert("existing-liability".into(), FaucetEntry { balance_pradha: FAUCET_MAX_OUTSTANDING_PRADHA, ..Default::default() });
         assert_eq!(s.funded_claimable_at(ADDR, START + 43_200), 0);
-        assert_eq!(s.funded_claim_at(ADDR, "device", START + 43_200), Err(ClaimError::FundingUnavailable));
+        assert_eq!(s.funded_claim_at(ADDR, "device", START + 43_200), Err(ClaimError::ReservoirFull));
     }
 
     #[test]
@@ -1062,7 +1057,7 @@ mod tests {
     fn outstanding_cap_stops_issuance() {
         let mut s = funded_state();
         let now = START + 43_200;
-        let cap = crate::emission_policy::claim_bucket_pradha(0);
+        let cap = FAUCET_MAX_OUTSTANDING_PRADHA;
         s.ledger.insert(
             "cen69:qzsgej828lu39wkvqfq8d2hwnul9ru79g3ja4ulj4y5cer25reym2unh2sjmw".into(),
             FaucetEntry {
@@ -1075,7 +1070,44 @@ mod tests {
                 last_withdraw_secs: 0,
             },
         );
-        assert_eq!(s.funded_claim_at(ADDR, "", now), Err(ClaimError::FundingUnavailable));
+        assert_eq!(s.funded_claim_at(ADDR, "", now), Err(ClaimError::ReservoirFull));
+    }
+
+    #[test]
+    fn outstanding_claims_are_capped_at_the_faucet_reserve_limit() {
+        let mut s = FaucetState::default();
+        s.update_funding(u64::MAX, 0, START);
+
+        assert_eq!(s.outstanding_cap_at(START), 500_000 * 100_000_000);
+        s.update_funding(u64::MAX, 816, START);
+        assert_eq!(s.outstanding_cap_at(START), 500_000 * 100_000_000);
+    }
+
+    #[test]
+    fn lowering_floor_never_erases_existing_faucet_claims() {
+        let mut s = FaucetState::default();
+        let existing = 600_000 * 100_000_000;
+        s.ledger.insert(ADDR.into(), FaucetEntry { balance_pradha: existing, ..Default::default() });
+        s.update_funding(u64::MAX, 816, START);
+
+        assert_eq!(s.outstanding_cap_at(START), existing);
+        assert_eq!(s.balance(ADDR).unwrap().balance_pradha, existing);
+    }
+
+    #[test]
+    fn fully_backed_claims_stop_at_five_hundred_thousand_cen() {
+        let mut s = FaucetState::default();
+        let limit = 500_000 * 100_000_000;
+        s.ledger.insert(ADDR.into(), FaucetEntry { balance_pradha: limit - 1000, ..Default::default() });
+        let now = FaucetState::now_secs();
+        s.update_funding(u64::MAX, 0, now);
+        assert_eq!(s.claim_at(ADDR, "", now).unwrap().balance_pradha, limit);
+        let before = serde_json::to_value(&s).unwrap();
+        assert_eq!(s.reward_pradha_today(), 0);
+        assert_eq!(s.claim_at(ADDR, "", now + DAY_SECS), Err(ClaimError::FundingUnavailable));
+        s.update_funding(u64::MAX, 0, now + DAY_SECS);
+        assert_eq!(s.claim_at(ADDR, "", now + DAY_SECS), Err(ClaimError::ReservoirFull));
+        assert_eq!(serde_json::to_value(&s).unwrap()["ledger"], before["ledger"]);
     }
 
     #[test]
