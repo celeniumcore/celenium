@@ -901,6 +901,8 @@ async fn handle_http_request(
                     "floorModel": "proportional-remaining-emission",
                     "initialFloorPradha": crate::emission_policy::TARGET_RESERVOIR_PRADHA,
                     "floorPradha": floor,
+                    "faucetOutstandingLimitPradha": crate::faucet::FAUCET_MAX_OUTSTANDING_PRADHA,
+                    "claimsRequireActiveMiners": false,
                     "emissionMonth": funding.map(|f| f.month),
                     "emissionClock": "node-virtual-daa",
                     "matureReservoirPradha": funding.map(|f| f.mature_pradha),
@@ -2371,6 +2373,11 @@ mod tests {
     #[tokio::test]
     async fn faucet_balance_http_exposes_fixed_daily_contract() {
         let state = std::sync::Arc::new(std::sync::Mutex::new(crate::faucet::FaucetState::default()));
+        state.lock().unwrap().update_funding(
+            crate::emission_policy::TARGET_RESERVOIR_PRADHA,
+            0,
+            crate::faucet::FaucetState::now_secs(),
+        );
         set_faucet_state(state);
         let mode = HttpMode::Aggregated { web_bind: "127.0.0.1:0".to_string() };
         let request =
@@ -2391,6 +2398,10 @@ mod tests {
         let double_encoded = request.replace("cen69:", "cen69%253A");
         let response = send_request(mode.clone(), &double_encoded).await;
         assert!(response.contains("InvalidAddress"));
+        let response = send_request(mode.clone(), "GET /api/faucet/status HTTP/1.1\r\n\r\n").await;
+        let status: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(status["faucetOutstandingLimitPradha"], 50_000_000_000_000_u64);
+        assert_eq!(status["claimsRequireActiveMiners"], false);
         let response = send_request(mode, "POST /api/faucet/claim HTTP/1.1").await;
         assert!(response.contains("error"));
     }

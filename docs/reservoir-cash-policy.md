@@ -10,6 +10,12 @@ reward atau transfer masuk sebagai UTXO yang dapat dibelanjakan.
 
 `floor(m) = 250000000000000 × remaining_emission(m) / remaining_emission(0)`
 
+Target floor mengatur akumulasi dan perlindungan surplus; plafon klaim adalah batas
+kewajiban ledger, bukan sub-wallet atau dana yang dipisahkan. Keduanya berbeda:
+plafon kewajiban klaim baru tetap 500.000 CEN, sementara klaim hanya dibayar dari
+saldo matang reservoir yang benar-benar tersedia. Worker aktif tidak diperlukan
+untuk membayar dari saldo yang sudah terkumpul.
+
 Nilai dalam pradha, perkalian `u128`, pembagian dibulatkan ke bawah. Bulan
 operasional berasal dari virtual DAA node pada 10 BPS, bukan tanggal komputer.
 Floor mulai turun pada bulan pertama dan menjadi nol pada akhir emisi. Fungsi
@@ -22,7 +28,10 @@ pada API faucet dan treasury memakai snapshot node.
   matang pada script alamat reservoir, tanpa covenant. Bridge juga mengeluarkan
   input yang sudah dibelanjakan di mempool.
 - Snapshot kedaluwarsa setelah 30 detik. Kegagalan node menghentikan klaim baru.
-- Kewajiban ledger lama tetap ada ketika saldo kurang atau floor turun.
+- Plafon kewajiban klaim baru adalah 500.000 CEN. Angka ini membatasi total saldo klaim off-chain, bukan saldo wallet atau dana yang otomatis tersedia.
+- Klaim dibayar dari saldo matang reservoir setelah kewajiban dan buffer biaya 2,5 CEN. Pembayaran dapat berjalan tanpa miner aktif selama dana tersebut mencukupi.
+- Floor dinamis tetap menjadi target saldo reservoir dan batas perlindungan saat surplus dikirim ke kas miner. Floor bukan sumber dana terpisah dan tidak melarang pembayaran klaim memakai saldo di reservoir.
+- Kewajiban ledger lama di atas plafon tetap utuh; sistem tidak menghapus atau memotong hak yang sudah tercatat.
 - Dana bebas = saldo matang dikurangi kewajiban dan buffer biaya 2,5 CEN.
 - Anggaran harian = minimum dana bebas dengan maksimum batas emisi legacy,
   dana bebas / 365, dan satu klaim tetap bila dana bebas mencukupi 1.000 pradha.
