@@ -25,13 +25,18 @@ pub const END_DAA: u64 = (SUBSIDY_BY_MONTH_TABLE.len() as u64 - 1) * BLOCKS_PER_
 const FIRST_SUBSIDY: u64 = SUBSIDY_BY_MONTH_TABLE[0].div_ceil(BPS);
 const LEGACY_WEIGHT: u64 = LEGACY_PREFIX[SUBSIDY_BY_MONTH_TABLE.len()] - FIRST_SUBSIDY;
 
-/// DAA zero belongs to genesis; only scores from one onward earn mining subsidy.
-pub fn cumulative_mining(daa: u64) -> u64 {
+fn legacy_cumulative(daa: u64) -> u64 {
     let score = daa.min(END_DAA);
     let month = (score / BLOCKS_PER_MONTH) as usize;
     let partial = score % BLOCKS_PER_MONTH;
     let weight = LEGACY_PREFIX[month] + SUBSIDY_BY_MONTH_TABLE[month].div_ceil(BPS) * partial;
-    ((weight.saturating_sub(FIRST_SUBSIDY) as u128 * FUTURE_MINING as u128) / LEGACY_WEIGHT as u128) as u64
+    weight
+}
+
+/// DAA zero belongs to genesis; only scores from one onward earn mining subsidy.
+pub fn cumulative_mining(daa: u64) -> u64 {
+    let weight = legacy_cumulative(daa).saturating_sub(FIRST_SUBSIDY);
+    ((weight as u128 * FUTURE_MINING as u128) / LEGACY_WEIGHT as u128) as u64
 }
 
 pub fn mining_subsidy(daa: u64) -> u64 {
@@ -50,9 +55,9 @@ impl ActivationSchedule {
 
     pub fn cumulative(&self, daa: u64) -> u64 {
         let score = daa.min(END_DAA);
-        let historical = self.activation * FIRST_SUBSIDY;
+        let historical = legacy_cumulative(self.activation);
         if score <= self.activation {
-            return score * FIRST_SUBSIDY;
+            return legacy_cumulative(score);
         }
         let prefix = |at: u64| {
             let month = (at / BLOCKS_PER_MONTH) as usize;
@@ -64,7 +69,11 @@ impl ActivationSchedule {
     }
 
     pub fn subsidy_at_acceptance_index(&self, index: u64) -> u64 {
-        self.cumulative(index.saturating_add(1)).saturating_sub(self.cumulative(index))
+        if index < self.activation {
+            legacy_cumulative(index.saturating_add(1)).saturating_sub(legacy_cumulative(index))
+        } else {
+            self.cumulative(index.saturating_add(1)).saturating_sub(self.cumulative(index))
+        }
     }
 
     pub fn crosses_activation(&self, start: u64, end: u64) -> bool {
@@ -89,10 +98,10 @@ mod tests {
     }
 
     #[test]
-    fn activation_boundary_counts_only_non_genesis_legacy_rewards() {
+    fn activation_boundary_preserves_the_daa_zero_legacy_reward() {
         let activation = 1000;
         let schedule = ActivationSchedule::new(activation).unwrap();
-        assert_eq!(schedule.cumulative(activation), (activation - 1) * FIRST_SUBSIDY);
+        assert_eq!(schedule.cumulative(activation), activation * FIRST_SUBSIDY);
     }
 
     #[test]
@@ -104,10 +113,22 @@ mod tests {
             sum += schedule.cumulative(end) - schedule.cumulative(start);
             start = end;
         }
-        assert_eq!(sum + 1000 * FIRST_SUBSIDY + INITIAL_RESERVE, MINING_BUDGET);
+        assert_eq!(sum + schedule.cumulative(1000) + INITIAL_RESERVE, MINING_BUDGET);
         let boundary = 48 * BLOCKS_PER_MONTH;
         let siblings_merged = (boundary - 1..boundary + 1).map(|index| schedule.subsidy_at_acceptance_index(index)).sum::<u64>();
         assert_eq!(siblings_merged, schedule.cumulative(boundary + 1) - schedule.cumulative(boundary - 1));
+    }
+
+    #[test]
+    fn crossing_activation_keeps_legacy_slot_rewards_before_switching_schedule() {
+        let activation = BLOCKS_PER_MONTH + 1000;
+        let schedule = ActivationSchedule::new(activation).unwrap();
+        assert_eq!(schedule.cumulative(activation), legacy_cumulative(activation));
+        assert_eq!(schedule.subsidy_at_acceptance_index(activation - 1), SUBSIDY_BY_MONTH_TABLE[1].div_ceil(BPS));
+        assert_eq!(
+            schedule.subsidy_at_acceptance_index(activation),
+            schedule.cumulative(activation + 1) - schedule.cumulative(activation)
+        );
     }
 
     #[test]
