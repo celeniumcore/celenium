@@ -1,85 +1,12 @@
-//! Kebijakan emisi dinamis untuk faucet Celenium.
+//! Kebijakan reservoir faucet berdasarkan tabel subsidi mainnet.
 //!
-//! Tujuan: reservoir faucet diisi dengan laju yang **dijamin mencapai target**
-//! dalam tenggat yang dipilih, lalu berhenti — bukan konstanta kaku yang secara
-//! matematis tidak pernah sampai.
+//! Floor awal 2.500.000 CEN menyusut tiap bulan sebanding dengan sisa emisi.
+//! Cut menabung menuju floor dengan horizon 48 bulan dan deadband 1%.
 //!
-//! ## Algoritma: deadline-fill + maintenance
+//! Bucket klaim/miner membagi target 60%/40%. Cap harian memakai `MAX_CUT`;
+//! pemanggil tetap harus membatasi pengeluaran pada dana yang tersedia.
 //!
-//! Reservoir punya target tetap `TARGET_RESERVOIR_PRADHA` (2.500.000 CEN).
-//! Setiap bulan, `cut_fraction(month, balance)` menjawab satu pertanyaan:
-//! *berapa porsi reward bulan ini yang harus disisihkan agar target tercapai
-//! dalam `FILL_HORIZON_MONTHS`, dan setelah itu agar saldo tidak terkikis?*
-//!
-//! ```text
-//! floor(m)    = FLOOR_FRACTION × sisa_emisi(m)      // target lokal, menyusut
-//! defisit     = floor(m) − saldo
-//! cut(m)      = clamp(defisit ÷ emisi(m..m+horizon), MIN_CUT, MAX_CUT)
-//! ```
-//!
-//! Sifat yang membuat ini benar, bukan sekadar masuk akal:
-//!
-//! - **Terjamin sampai.** `defisit ÷ emisi_selama_horizon` adalah laju yang
-//!   persis menghabiskan defisit dalam horizon. Karena penyebutnya emisi nyata
-//!   (bukan konstanta), target tercapai dalam 48 bulan dengan asumsi emisi
-//!   berjalan seperti tabel — bukan 68 tahun, bukan tidak pernah.
-//! - **Self-correcting.** Kalau faucet dikuras orang, saldo turun → defisit
-//!   naik → cut naik (sampai `MAX_CUT`). Kalau saldo penuh, defisit ≤ deadband
-//!   → cut 0 → reward kembali 100% ke miner. Tidak perlu intervensi manual.
-//! - **Tidak mengejar bulan sabit.** `floor(m)` menyusut mengikuti sisa emisi,
-//!   jadi reservoir tidak pernah menuntut dana yang belum tentu terbit. Saat
-//!   emisi berakhir, floor = 0 dan cut = 0 secara alami.
-//! - **Berhenti bersih.** `MAX_CUT` membatasi beban maksimum ke miner (10%),
-//!   `MIN_CUT` memastikan sisa defisit kecil tetap tuntas, bukan menggantung
-//!   sebagai cut mikro selamanya.
-//!
-//! ## Kenapa bukan versi sebelumnya
-//!
-//! Versi lama memakai `cut` melandai 5%→1,5% dan `floor = 5% sisa emisi`.
-//! Keduanya saling lepas: inflow total = 1,5% × emisi = 787.501 CEN, sedangkan
-//! ambang mati = 1,2 × floor(0) = 3.150.005 CEN. Reservoir tidak akan pernah
-//! menyentuh ambang mati, dan karena floor menyusut lebih cepat daripada saldo
-//! naik, ambang menyalip saldo di bulan ke-94 sehingga cut mati prematur di
-//! 825.788 CEN — 33% dari target. Terbukti lewat simulasi terhadap tabel
-//! subsidi mainnet, bukan dugaan.
-//!
-//! ## Dua kewajiban, satu reservoir
-//!
-//! Reservoir tidak hanya membayar klaim faucet. Dana yang sama juga dipakai
-//! membiayai miner Android, jadi target tunggal 2.500.000 CEN sebenarnya
-//! menyembunyikan dua tagihan yang bersaing:
-//!
-//! ```text
-//! target_reservoir = bucket_klaim + bucket_miner
-//! bucket_klaim     = (1 − MINER_SUBSIDY_SHARE) × floor
-//! bucket_miner     = MINER_SUBSIDY_SHARE × floor
-//! ```
-//!
-//! Keduanya berbagi laju inflow yang sama, jadi `daily_cap_pradha` (cap klaim)
-//! dan `miner_subsidy_daily_pradha` (anggaran miner) dihitung dari porsi
-//! masing-masing, bukan dari total. Menjumlahkan keduanya tidak pernah melebihi
-//! inflow yang benar-benar masuk — inilah yang mencegah faucet menjanjikan dana
-//! yang sudah dialokasikan ke tempat lain.
-//!
-//! Tanpa pemisahan ini, cap klaim akan memakai seluruh inflow dan subsidi miner
-//! hanya bisa dibayar dengan menguras bucket klaim — defisit yang tidak terlihat
-//! sampai penarikan gagal.
-//!
-//! ## Kap harian faucet
-//!
-//! `daily_cap_pradha(month)` = **laju inflow berkelanjutan** bucket klaim pada
-//! `MAX_CUT`: `emisi_bulan × 10% × 60% ÷ hari_per_bulan`. Tidak ada komponen
-//! amortisasi saldo — itu akan membayar dari bucket yang belum terisi.
-//! Cap menyusut bersama emisi dan tidak pernah melebihi dana yang benar-benar
-//! masuk, bukan angka fiktif yang mengantrekan klaim gagal.
-//!
-//! Semua dihitung dari tabel subsidy yang sama dengan konsensus
-//! (`SUBSIDY_BY_MONTH_TABLE`, 817 bulan mulai genesis 7 Nov 2026). Nilai
-//! pradha disimpan u64: total sisa emisi ≈ 5.25e18 pradha < u64::MAX.
-//!
-//! Sifat deterministik: dua pemanggil dengan `now_secs` dan saldo yang sama
-//! melihat kebijakan yang sama, sehingga kode reservoir dan faucet tidak bisa
-//! berbeda pendapat.
+//! Nilai pradha mengikuti pembulatan subsidi konsensus 10 BPS.
 
 /// Detik per bulan (rata-rata 30,4375 hari), sama dengan konsensus.
 pub const SECONDS_PER_MONTH: u64 = 2_629_800;
@@ -87,61 +14,28 @@ pub const SECONDS_PER_MONTH: u64 = 2_629_800;
 /// Blocks per second mainnet.
 pub const BPS: u64 = 10;
 
-/// Target reservoir faucet: 2.500.000 CEN dalam pradha (1 CEN = 1e8 pradha).
+/// Target awal reservoir: 2.500.000 CEN dalam pradha (1 CEN = 1e8 pradha).
 pub const TARGET_RESERVOIR_PRADHA: u64 = 250_000_000_000_000;
 
-/// Tenggat pengisian reservoir, dalam bulan (4 tahun).
-///
-/// Dipilih agar cut awal tetap di bawah `MAX_CUT` dengan tabel emisi mainnet:
-/// emisi 48 bulan pertama = 26.250.205 CEN, sehingga laju yang dibutuhkan
-/// 2.500.000 ÷ 26.250.205 = 9,52% — di bawah plafon 10%. Horizon 36 bulan akan
-/// menuntut 12,70% dan terpotong plafon, sehingga target tidak lagi terjamin.
+/// Horizon perhitungan laju tabungan (bulan), bukan jaminan pengisian saldo.
 pub const FILL_HORIZON_MONTHS: u64 = 48;
 
 /// Beban maksimum yang boleh diambil dari reward miner (10%).
-///
-/// Ini pagar kepercayaan, bukan angka teknis: miner harus bisa memprediksi
-/// bahwa pool tidak akan mengambil lebih dari sepersepuluh reward mereka.
 pub const MAX_CUT_FRACTION: f64 = 0.10;
 
 /// Cut minimum saat masih ada defisit (0,5%).
-///
-/// Tanpa lantai ini, defisit yang tinggal sedikit menghasilkan cut mikroskopis
-/// yang tidak pernah tuntas dan membuat faucet terus memotong reward.
 pub const MIN_CUT_FRACTION: f64 = 0.005;
 
-/// Zona mati relatif terhadap floor (1%).
-///
-/// Saldo di dalam 1% floor dianggap "sudah penuh" agar cut tidak menyala-mati
-/// setiap blok karena fluktuasi pembulatan.
+/// Defisit dalam 1% floor dianggap penuh agar cut stabil terhadap pembulatan.
 pub const DEADBAND_FRACTION: f64 = 0.01;
 
-/// Porsi target reservoir yang dialokasikan untuk membiayai miner Android.
-///
-/// Dihitung dari pengeluaran nyata, bukan angka bulat: miner Android menanggung
-/// kuota data, listrik, dan keausan perangkat yang tidak sebanding dengan
-/// hashrate ponsel. 40% dipilih karena:
-///
-/// - klaim faucet tetap dapat porsi mayoritas (60%), sehingga insentif partisipasi
-///   tidak tergerus oleh subsidi;
-/// - pada emisi bulan 0 (546.879 CEN/bulan), 40% × cut 10% = 719 CEN/hari, cukup
-///   untuk ~10 miner pada ~72 CEN/hari masing-masing di fase awal;
-/// - porsi ini menyusut bersama emisi secara alami, jadi tidak ada janji subsidi
-///   yang melampaui dana yang akan terbit.
-///
-/// Ubah angka ini untuk menggeser keseimbangan; seluruh perhitungan lain
-/// mengikuti otomatis karena hanya konstanta ini yang menyebut porsi.
+/// Porsi target reservoir untuk subsidi miner Android (40%); sisanya klaim.
 pub const MINER_SUBSIDY_SHARE: f64 = 0.40;
 
-/// Jumlah miner Android yang ingin didukung kebijakan pada fase awal.
-///
-/// Dipakai untuk menerjemahkan anggaran agregat menjadi angka per-perangkat yang
-/// bisa dipahami operator. Bukan batas keras: kalau miner lebih sedikit, tiap
-/// perangkat menerima bagian lebih besar; kalau lebih banyak, subsidi per
-/// perangkat mengecil. Nilai ini hanya pembagi pelaporan.
+/// Pembagi pelaporan subsidi per perangkat, bukan batas jumlah miner aktif.
 pub const TARGET_MINER_COUNT: u32 = 10;
 
-/// Detik per bulan sebagai f64, untuk konversi laju harian.
+/// Hari per bulan sebagai f64, untuk konversi laju harian.
 const DAYS_PER_MONTH: f64 = 30.4375;
 
 /// Timestamp genesis mainnet (7 Nov 2026 20:00:00 UTC).
@@ -230,13 +124,12 @@ pub fn remaining_emission_pradha(month: u64) -> u64 {
     })
 }
 
-/// Target reservoir lokal (floor) pada bulan `month`, dalam pradha.
-///
-/// Nilainya `TARGET_RESERVOIR_PRADHA`, tetapi tidak pernah melebihi emisi yang
-/// masih tersisa — supaya di ekor emisi reservoir tidak menuntut dana yang
-/// sudah tidak akan terbit. Saat emisi habis, floor = 0 dan cut = 0.
+/// Target awal dikali rasio sisa emisi terhadap emisi awal, dibulatkan ke bawah.
+/// Perkalian memakai u128 agar presisi pradha terjaga tanpa overflow.
 pub fn floor_pradha(month: u64) -> u64 {
-    TARGET_RESERVOIR_PRADHA.min(remaining_emission_pradha(month))
+    let remaining = remaining_emission_pradha(month) as u128;
+    let initial = remaining_emission_pradha(0) as u128;
+    ((TARGET_RESERVOIR_PRADHA as u128 * remaining) / initial) as u64
 }
 
 /// Emisi kumulatif dari bulan `from` sampai `to` (eksklusif), dalam pradha.
@@ -253,17 +146,8 @@ pub fn emission_to(from: u64, to: u64) -> u64 {
     })
 }
 
-/// Porsi reward blok yang harus disisihkan pada bulan `month` bila reservoir
-/// saat ini berisi `balance_pradha` (0.0..=`MAX_CUT_FRACTION`).
-///
-/// Inilah algoritma pengisian: setiap bulan, reservoir menabung porsi tetap
-/// dari emisi bulan itu — `floor × emisi_bulan / emisi_48_bulan` — sehingga
-/// dalam 48 bulan, terkumpul target (diuji: bulan ke-46). Laju tidak pernah
-/// melebihi `MAX_CUT_FRACTION`; jika defisit lebih kecil dari porsi tabungan,
-/// cut menyusut agar tidak overfill. Saldo di dalam deadband (1% floor) tidak
-/// memotong sama sekali: reward kembali utuh ke miner. Setelah target tercapai
-/// cut = 0 (maintenance), dan jika pengurasan menurunkan saldo, cut menyala
-/// kembali secara otomatis (self-correcting).
+/// Cut menabung `floor × emisi_bulan / emisi_horizon`, dibatasi defisit dan
+/// rentang cut. Saldo dalam deadband floor mematikan pemotongan.
 pub fn cut_fraction(month: u64, balance_pradha: u64) -> f64 {
     let floor = floor_pradha(month);
     let deficit = floor.saturating_sub(balance_pradha);
@@ -273,10 +157,6 @@ pub fn cut_fraction(month: u64, balance_pradha: u64) -> f64 {
         return 0.0;
     }
 
-    // Emisi yang akan terbit selama horizon. Bila emisi habis sebelum horizon
-    // tercapai (bulan-bulan terakhir), penyebutnya menyusut dan cut naik —
-    // perilaku yang benar: sisa waktu makin pendek, tiap bulan harus lebih
-    // banyak menabung.
     let horizon_emission = emission_to(month, month.saturating_add(FILL_HORIZON_MONTHS));
     if horizon_emission == 0 {
         // Emisi sudah berakhir: tidak ada lagi yang bisa disisihkan.
@@ -288,7 +168,6 @@ pub fn cut_fraction(month: u64, balance_pradha: u64) -> f64 {
         return 0.0;
     }
 
-    // Tabungan rata-rata yang diperlukan setiap bulan selama horizon.
     let target_inflow = (floor as f64) * (month_emission as f64) / (horizon_emission as f64);
     let inflow = target_inflow.min(deficit as f64);
     if inflow <= 0.0 {
@@ -306,10 +185,7 @@ pub fn claim_share() -> f64 {
     1.0 - MINER_SUBSIDY_SHARE
 }
 
-/// Bucket klaim faucet pada bulan `month`, dalam pradha.
-///
-/// Ini plafon kewajiban ledger: total saldo tercatat tidak boleh melewatinya,
-/// karena sisa floor sudah dijanjikan ke subsidi miner.
+/// Porsi target untuk klaim faucet; saldo aktual tetap diperiksa pemanggil.
 pub fn claim_bucket_pradha(month: u64) -> u64 {
     (floor_pradha(month) as f64 * claim_share()) as u64
 }
@@ -319,12 +195,8 @@ pub fn miner_bucket_pradha(month: u64) -> u64 {
     (floor_pradha(month) as f64 * MINER_SUBSIDY_SHARE) as u64
 }
 
-/// Anggaran subsidi miner Android per hari pada bulan `month`, dalam pradha.
-///
-/// Sama seperti cap klaim: **hanya laju inflow berkelanjutan**, tanpa komponen
-/// amortisasi saldo. Amortisasi akan membayar dari bucket yang belum terisi di
-/// fase awal. Nilainya adalah **total untuk semua miner**, bukan per perangkat —
-/// pembagian ke tiap miner dilakukan pemanggil sesuai jumlah miner aktif.
+/// Plafon subsidi harian semua miner pada `MAX_CUT`, tanpa amortisasi saldo.
+/// Nilai ini bukan dana tersedia; pemanggil memeriksa saldo dan inflow aktual.
 pub fn miner_subsidy_daily_pradha(month: u64) -> u64 {
     let monthly_inflow = (subsidy_pradha_month(month) as f64 * MAX_CUT_FRACTION * MINER_SUBSIDY_SHARE) as u64;
     (monthly_inflow as f64 / DAYS_PER_MONTH) as u64
@@ -341,22 +213,8 @@ pub fn miner_subsidy_per_miner_pradha(month: u64, miner_count: u32) -> u64 {
     miner_subsidy_daily_pradha(month) / miner_count as u64
 }
 
-/// Kap klaim harian dinamis pada bulan `month`, dalam pradha.
-///
-/// Dihitung **hanya dari bucket klaim**, bukan seluruh floor: 40% reservoir
-/// sudah dialokasikan untuk subsidi miner Android. Memakai floor penuh di sini
-/// akan menjanjikan dana yang bukan milik faucet klaim.
-///
-/// Nilainya adalah **laju inflow berkelanjutan** pada beban potong maksimum:
-/// `emisi_bulan × MAX_CUT × porsi_klaim ÷ hari_per_bulan`.
-///
-/// Tidak ada komponen amortisasi saldo. Versi sebelumnya menambahkan
-/// `bucket ÷ 365`, dan itu menjanjikan dana yang belum masuk: di bulan 0 saldo
-/// reservoir masih 0, tetapi cap-nya menjadi 5.187 CEN/hari terhadap inflow
-/// nyata 1.078 CEN/hari. Selisih 4.109 CEN/hari hanya bisa dibayar dengan
-/// menguras bucket, sehingga bucket 1,5 juta CEN habis dalam 289 hari padahal
-/// target pengisiannya 48 bulan. Cap sekarang tidak pernah melebihi dana yang
-/// benar-benar masuk.
+/// Plafon klaim harian pada `MAX_CUT`, memakai porsi klaim tanpa amortisasi saldo.
+/// Nilai ini bukan dana tersedia; pemanggil memeriksa saldo dan inflow aktual.
 pub fn daily_cap_pradha(month: u64) -> u64 {
     let monthly_inflow = (subsidy_pradha_month(month) as f64 * MAX_CUT_FRACTION * claim_share()) as u64;
     (monthly_inflow as f64 / DAYS_PER_MONTH) as u64
@@ -439,24 +297,25 @@ mod tests {
         assert!(c_half > 0.0);
     }
 
-    /// Bukti utama: simulasi terhadap tabel emisi mainnet mencapai target
-    /// 2.500.000 CEN dalam `FILL_HORIZON_MONTHS`, bukan meleset seperti versi
-    /// lama (825.788 CEN).
     #[test]
-    fn simulation_fills_target_within_horizon() {
+    fn simulation_reaches_dynamic_target_without_spending() {
         let mut balance = 0u64;
         let mut reached = None;
         for month in 0..table_len() as u64 {
             let cut = cut_fraction(month, balance);
             let inflow = (subsidy_pradha_month(month) as f64 * cut) as u64;
             balance = balance.saturating_add(inflow);
-            if reached.is_none() && balance >= TARGET_RESERVOIR_PRADHA {
-                reached = Some(month);
+            if reached.is_some() {
+                assert_eq!(cut, 0.0, "cut menyala lagi di bulan {month}");
+            } else if balance >= floor_pradha(month) {
+                reached = Some(month + 1);
             }
         }
-        let month = reached.expect("target harus tercapai");
-        assert!(month <= FILL_HORIZON_MONTHS, "target tercapai bulan {month}, melewati horizon {FILL_HORIZON_MONTHS}");
-        assert!(balance >= TARGET_RESERVOIR_PRADHA, "saldo akhir {} < target", balance);
+        let elapsed_months = reached.expect("target dinamis harus tercapai tanpa pengeluaran");
+        assert!(
+            elapsed_months <= FILL_HORIZON_MONTHS,
+            "target tercapai setelah {elapsed_months} bulan, melewati horizon {FILL_HORIZON_MONTHS}"
+        );
     }
 
     /// Setelah target tercapai dan tidak ada pengurasan, cut harus mati:
@@ -464,35 +323,80 @@ mod tests {
     #[test]
     fn cut_stays_off_once_target_reached() {
         let month = FILL_HORIZON_MONTHS;
-        assert_eq!(cut_fraction(month, TARGET_RESERVOIR_PRADHA), 0.0, "reservoir penuh → reward penuh ke miner");
+        assert_eq!(cut_fraction(month, floor_pradha(month)), 0.0, "reservoir penuh → reward penuh ke miner");
     }
 
     /// Pengurasan di tengah jalan harus menyalakan cut lagi (self-correcting).
     #[test]
     fn drain_after_fill_turns_cut_back_on() {
         let month = FILL_HORIZON_MONTHS + 12;
-        assert_eq!(cut_fraction(month, TARGET_RESERVOIR_PRADHA), 0.0);
-        let drained = TARGET_RESERVOIR_PRADHA / 2;
+        let floor = floor_pradha(month);
+        assert_eq!(cut_fraction(month, floor), 0.0);
+        let drained = floor / 2;
         assert!(cut_fraction(month, drained) > 0.0, "saldo terkuras → cut hidup lagi");
     }
 
     #[test]
     fn floor_never_exceeds_target() {
-        for m in [0u64, 12, 48, 300, 600, 800] {
+        for m in 0..=table_len() as u64 {
             assert!(floor_pradha(m) <= TARGET_RESERVOIR_PRADHA);
         }
     }
 
     #[test]
-    fn floor_decays_only_when_emission_is_low() {
-        // Fase awal: target penuh.
+    fn floor_declines_from_month_one() {
+        assert!(floor_pradha(1) < floor_pradha(0));
+    }
+
+    #[test]
+    fn floor_starts_at_initial_target() {
         assert_eq!(floor_pradha(0), TARGET_RESERVOIR_PRADHA);
-        // Ekor emisi: floor mengikuti sisa yang benar-benar akan terbit.
-        let last = table_len() as u64 - 1;
-        assert_eq!(floor_pradha(last), 0);
-        let tail = floor_pradha(last - 1);
-        assert!(tail < TARGET_RESERVOIR_PRADHA);
-        assert_eq!(tail, remaining_emission_pradha(last - 1));
+    }
+
+    #[test]
+    fn floor_declines_each_month_while_emission_remains() {
+        for month in 0..table_len() as u64 - 1 {
+            assert!(floor_pradha(month + 1) < floor_pradha(month), "floor tidak turun setelah bulan {month}");
+        }
+    }
+
+    #[test]
+    fn floor_is_zero_after_emission_ends() {
+        let end = table_len() as u64 - 1;
+        for month in [end, end + 1, u64::MAX] {
+            assert_eq!(floor_pradha(month), 0, "floor bulan {month}");
+        }
+    }
+
+    #[test]
+    fn floor_never_exceeds_remaining_emission() {
+        for month in 0..=table_len() as u64 {
+            assert!(floor_pradha(month) <= remaining_emission_pradha(month), "floor melebihi sisa emisi bulan {month}");
+        }
+    }
+
+    #[test]
+    fn floor_tracks_remaining_emission_rounded_down() {
+        let initial = remaining_emission_pradha(0) as u128;
+        assert!(initial > TARGET_RESERVOIR_PRADHA as u128);
+        for month in 0..=table_len() as u64 {
+            let numerator = (TARGET_RESERVOIR_PRADHA as u128)
+                .checked_mul(remaining_emission_pradha(month) as u128)
+                .expect("produksi floor harus muat dalam u128");
+            let floor = floor_pradha(month) as u128;
+            let lower = floor.checked_mul(initial).expect("batas bawah harus muat dalam u128");
+            let upper = lower.checked_add(initial).expect("batas atas harus muat dalam u128");
+            assert!(lower <= numerator && numerator < upper, "pembulatan floor bulan {month}");
+        }
+    }
+
+    #[test]
+    fn floor_intermediate_product_requires_u128() {
+        let product = (TARGET_RESERVOIR_PRADHA as u128)
+            .checked_mul(remaining_emission_pradha(0) as u128)
+            .expect("produksi floor awal harus muat dalam u128");
+        assert!(product > u64::MAX as u128);
+        assert_eq!(floor_pradha(0), TARGET_RESERVOIR_PRADHA);
     }
 
     #[test]

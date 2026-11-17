@@ -89,6 +89,41 @@ use std::{
 use tokio::join;
 use workflow_rpc::server::WebSocketCounters as WrpcServerCounters;
 
+fn current_consensus_utxos(
+    consensus: &dyn celenium_consensus_core::api::ConsensusApi,
+    entries: Vec<RpcUtxosByAddressesEntry>,
+) -> RpcResult<Vec<RpcUtxosByAddressesEntry>> {
+    use celenium_consensus_core::{
+        constants::TX_VERSION,
+        subnets::SUBNETWORK_ID_NATIVE,
+        tx::{MutableTransaction, TransactionInput},
+    };
+    if entries.is_empty() {
+        return Ok(entries);
+    }
+    let inputs = entries.iter().map(|entry| TransactionInput::new(entry.outpoint.into(), vec![], 0, 1)).collect();
+    let mut probe =
+        MutableTransaction::new(Arc::new(Transaction::new(TX_VERSION, inputs, vec![], 0, SUBNETWORK_ID_NATIVE, 0, vec![])));
+    // Populate acquires one consensus UTXO read lock; indexed amounts never establish backing.
+    match consensus.populate_mempool_transaction(&mut probe) {
+        Ok(()) | Err(celenium_consensus_core::errors::tx::TxRuleError::MissingTxOutpoints) => {}
+        Err(error) => return Err(RpcError::General(format!("cannot validate indexed UTXOs: {error}"))),
+    }
+    Ok(entries
+        .into_iter()
+        .zip(probe.entries)
+        .filter_map(|(mut indexed, actual)| {
+            let actual = actual?;
+            let expected = indexed.address.as_ref().map(pay_to_address_script)?;
+            if actual.script_public_key != expected {
+                return None;
+            }
+            indexed.utxo_entry = actual.into();
+            Some(indexed)
+        })
+        .collect())
+}
+
 /// A service implementing the Rpc API at celenium_rpc_core level.
 ///
 /// Collects notifications from the consensus and forwards them to
@@ -616,7 +651,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         Ok(GetInfoResponse {
             p2p_id: self.flow_context.node_id.to_string(),
             mempool_size: self.mining_manager.transaction_count_sample(TransactionQuery::TransactionsOnly),
-            server_version: version().to_string(),
+            server_version: format!("{}+utxo-consensus-v1", version()),
             is_utxo_indexed: self.config.utxoindex,
             is_synced: self.mining_rule_engine.is_sink_recent_and_connected(sink_daa_score_timestamp),
             has_notify_command: true,
@@ -830,7 +865,9 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         // TODO: discuss if the entry order is part of the method requirements
         //       (the current impl does not retain an entry order matching the request addresses order)
         let entry_map = self.get_utxo_set_by_script_public_key(request.addresses.iter()).await;
-        Ok(GetUtxosByAddressesResponse::new(self.index_converter.get_utxos_by_addresses_entries(&entry_map)))
+        let candidates = self.index_converter.get_utxos_by_addresses_entries(&entry_map);
+        let entries = session.spawn_blocking(move |consensus| current_consensus_utxos(consensus, candidates)).await?;
+        Ok(GetUtxosByAddressesResponse::new(entries))
     }
 
     async fn get_utxos_by_addresses_v2_call(
@@ -910,7 +947,8 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
 
         let next_cursor = page.next_cursor();
         let entries = page.entries();
-        let entries = self.index_converter.get_ordered_utxos_by_addresses_entries(entries);
+        let candidates = self.index_converter.get_ordered_utxos_by_addresses_entries(entries);
+        let entries = session.spawn_blocking(move |consensus| current_consensus_utxos(consensus, candidates)).await?;
 
         Ok(GetUtxosByAddressesV2Response::new(entries, next_cursor.map(|c| (c, self.config.prefix()).try_into()).transpose()?))
     }
@@ -1455,7 +1493,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         Ok(GetServerInfoResponse {
             rpc_api_version: RPC_API_VERSION,
             rpc_api_revision: RPC_API_REVISION,
-            server_version: version().to_string(),
+            server_version: format!("{}+utxo-consensus-v1", version()),
             network_id: self.config.net,
             has_utxo_index: self.config.utxoindex,
             is_synced,
@@ -1569,6 +1607,51 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
     async fn stop_notify(&self, id: ListenerId, scope: Scope) -> RpcResult<()> {
         self.notifier.clone().stop_notify(id, scope).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod backing_tests {
+    use super::*;
+    use celenium_consensus_core::{
+        api::ConsensusApi,
+        errors::tx::TxRuleError,
+        tx::{MutableTransaction, UtxoEntry},
+    };
+
+    struct CurrentUtxos;
+    impl ConsensusApi for CurrentUtxos {
+        fn populate_mempool_transaction(&self, tx: &mut MutableTransaction) -> Result<(), TxRuleError> {
+            let script = pay_to_address_script(&RpcAddress::new(
+                celenium_addresses::Prefix::Mainnet,
+                celenium_addresses::Version::PubKey,
+                &[1; 32],
+            ));
+            for (input, entry) in tx.tx.inputs.iter().zip(tx.entries.iter_mut()) {
+                if input.previous_outpoint.index == 2 {
+                    *entry = Some(UtxoEntry::new(42, script.clone(), 0, false, None));
+                }
+            }
+            Err(TxRuleError::MissingTxOutpoints)
+        }
+    }
+
+    #[test]
+    fn indexed_spent_outputs_cannot_be_reported_as_current_backing() {
+        let address = RpcAddress::new(celenium_addresses::Prefix::Mainnet, celenium_addresses::Version::PubKey, &[1; 32]);
+        let script = pay_to_address_script(&address);
+        let candidates = [1, 2]
+            .into_iter()
+            .map(|index| RpcUtxosByAddressesEntry {
+                address: Some(address.clone()),
+                outpoint: RpcTransactionOutpoint { transaction_id: Default::default(), index },
+                utxo_entry: UtxoEntry::new(999, script.clone(), 0, false, None).into(),
+            })
+            .collect();
+        let found = current_consensus_utxos(&CurrentUtxos, candidates).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].outpoint.index, 2);
+        assert_eq!(found[0].utxo_entry.amount, 42);
     }
 }
 

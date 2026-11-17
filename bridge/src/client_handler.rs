@@ -227,8 +227,8 @@ impl ClientHandler {
             debug!("send_immediate_job: fetching block template for client {} (wallet: {})", client_clone.remote_addr, wallet_addr);
 
             // Get block template (pool mode: coinbase ke alamat pool)
-            let coinbase_addr = pool_address.as_deref().unwrap_or(&wallet_addr);
-            let template_result = celenium_api_clone.get_block_template(coinbase_addr, &remote_app, &canxium_addr).await;
+            let coinbase_addr = crate::treasury::coinbase_address(&wallet_addr, pool_address.as_deref());
+            let template_result = celenium_api_clone.get_block_template(&coinbase_addr, &remote_app, &canxium_addr).await;
 
             let block = match template_result {
                 Ok(block) => {
@@ -560,8 +560,8 @@ impl ClientHandler {
                     (wallet, app, canx)
                 };
 
-                let coinbase_addr = pool_address.as_deref().unwrap_or(&wallet_addr);
-                let template_result = celenium_api_clone.get_block_template(coinbase_addr, &remote_app, &canxium_addr).await;
+                let coinbase_addr = crate::treasury::coinbase_address(&wallet_addr, pool_address.as_deref());
+                let template_result = celenium_api_clone.get_block_template(&coinbase_addr, &remote_app, &canxium_addr).await;
 
                 let block = match template_result {
                     Ok(block) => {

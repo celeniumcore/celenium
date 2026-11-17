@@ -455,10 +455,35 @@ static FAUCET_SIGNER: OnceLock<Option<std::sync::Arc<crate::faucet_signer::Fauce
 /// withdraw route can report it without touching the parsed config.
 static FAUCET_PAYOUT_ADDRESS: OnceLock<Option<String>> = OnceLock::new();
 
+pub fn faucet_address() -> Option<String> {
+    FAUCET_PAYOUT_ADDRESS.get().cloned().flatten()
+}
+
 /// Serialises withdrawals. The ledger is the only record of what the faucet
 /// owes, so two concurrent withdrawals must not both read the same balance and
 /// each send a full payout.
-static FAUCET_WITHDRAW_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(crate) static FAUCET_WITHDRAW_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+async fn refresh_faucet_funding() {
+    let Some(state) = FAUCET_STATE.get() else { return };
+    let journal = crate::treasury::TreasuryJournal::load(std::path::Path::new(crate::treasury::TREASURY_JOURNAL_PATH));
+    if journal.as_ref().is_err() || journal.as_ref().is_ok_and(|j| !j.can_prepare()) {
+        state.lock().unwrap().invalidate_funding();
+        return;
+    }
+    let result = match (NODE_API.get(), FAUCET_PAYOUT_ADDRESS.get().and_then(|a| a.as_deref())) {
+        (Some(api), Some(address)) => tokio::time::timeout(std::time::Duration::from_secs(10), api.funding_snapshot(address)).await,
+        _ => {
+            state.lock().unwrap().invalidate_funding();
+            return;
+        }
+    };
+    let mut state = state.lock().unwrap();
+    match result {
+        Ok(Ok(funds)) => state.update_funding(funds.mature_pradha, funds.month, funds.observed_at),
+        _ => state.invalidate_funding(),
+    }
+}
 
 /// Attach the faucet signer + payout address (called once from `main`).
 pub fn set_faucet_signer(signer: Option<std::sync::Arc<crate::faucet_signer::FaucetSigner>>, address: Option<String>) {
@@ -534,6 +559,11 @@ fn faucet_claim_response_at(
 /// requests cannot both spend the same balance.
 async fn withdraw_response(body: &str) -> String {
     let _guard = FAUCET_WITHDRAW_LOCK.lock().await;
+    let journal_path = std::path::Path::new(crate::treasury::TREASURY_JOURNAL_PATH);
+    let mut journal = match crate::treasury::TreasuryJournal::load(journal_path) {
+        Ok(j) if j.can_prepare() => j,
+        _ => return serde_json::json!({"error":"reservoir transfer pending or journal needs recovery; retry later", "errorCode":"TransferPending"}).to_string(),
+    };
 
     let v = match serde_json::from_str::<serde_json::Value>(body) {
         Ok(v) => v,
@@ -628,8 +658,8 @@ async fn withdraw_response(body: &str) -> String {
         None => return serde_json::json!({ "error": "node api not ready" }).to_string(),
     };
 
-    let reservoir_balance = match api.get_balances_by_addresses(&[payout_address.clone()]).await {
-        Ok(v) => v.first().map(|(_, b)| *b).unwrap_or(0),
+    let reservoir_balance = match api.funding_snapshot(&payout_address).await {
+        Ok(funds) => funds.mature_pradha,
         Err(e) => {
             tracing::warn!("faucet balance query failed: {e:#}");
             return serde_json::json!({"error": "cannot read the faucet balance; retry later", "errorCode": "NodeUnavailable"})
@@ -658,22 +688,52 @@ async fn withdraw_response(body: &str) -> String {
     let fee = prepared.fee_pradha();
     {
         let state = state.lock().unwrap();
+        if reservoir_balance.saturating_sub(amount).saturating_sub(fee) < state.total_outstanding().saturating_sub(amount) {
+            return serde_json::json!({"error":"reservoir cannot cover existing claims and this transfer fee", "errorCode":"InsufficientBacking"}).to_string();
+        }
         if let Err(e) = state.check_withdraw_fee(&address, fee) {
             return serde_json::json!({ "error": e.to_string(), "balancePradha": balance }).to_string();
         }
     }
+    journal.pending = Some(crate::treasury::PendingTransfer {
+        transaction_json: match prepared.transaction_json() {
+            Ok(s) => s,
+            Err(_) => return serde_json::json!({"error":"cannot encode transfer"}).to_string(),
+        },
+        transaction_id: prepared.transaction_id().to_owned(),
+        amount_pradha: amount,
+        fee_pradha: fee,
+        source: payout_address.clone(),
+        destination: address.clone(),
+        network: prepared.network_id.to_string(),
+        withdrawal: true,
+        input_entries: prepared.input_entries(),
+        anchor: match api.transfer_anchor().await {
+            Ok(anchor) => Some(anchor),
+            Err(_) => {
+                return serde_json::json!({"error":"cannot read transfer anchor; retry later", "errorCode":"NodeUnavailable"})
+                    .to_string();
+            }
+        },
+    });
+    if let Err(e) = journal.save(journal_path) {
+        tracing::error!("withdrawal journal persistence failed: {e}");
+        return serde_json::json!({"error":"cannot save transfer journal; withdrawal paused", "errorCode":"StorageUnavailable"})
+            .to_string();
+    }
+    state.lock().unwrap().invalidate_funding();
     let txid = match api.submit_prepared_transfer(prepared).await {
         Ok(txid) => txid,
         Err(e) => {
             tracing::warn!("faucet submit failed: {e:#}");
-            return serde_json::json!({ "error": format!("{e:#}"), "balancePradha": balance }).to_string();
+            return serde_json::json!({ "error": format!("{e:#}"), "errorCode":"TransferPending", "pendingTxid": journal.pending.as_ref().map(|p| &p.transaction_id), "balancePradha": balance }).to_string();
         }
     };
 
     // The node accepted the transaction, so the ledger balance is settled.
     let remaining = {
         let mut s = state.lock().unwrap();
-        if !s.record_withdraw(&address, amount, fee) {
+        if !s.settle_withdrawal(&txid, &address, amount, fee) {
             tracing::error!("faucet withdraw: tx {txid} sent but ledger debit failed for {address}");
             return serde_json::json!({
                 "error": "transaction sent but the ledger could not be debited — contact the operator with this txid",
@@ -833,7 +893,23 @@ async fn handle_http_request(
                 let outstanding = s.total_outstanding();
                 let daily_cap = s.daily_cap_now();
                 let outstanding_cap = s.outstanding_cap_now();
+                let now = crate::faucet::FaucetState::now_secs();
+                let funding = s.funding.filter(|f| f.is_fresh(now));
+                let floor = funding.map(|f| crate::emission_policy::floor_pradha(f.month));
                 serde_json::json!({
+                    "fundingModel": "mature-cash-backed",
+                    "floorModel": "proportional-remaining-emission",
+                    "initialFloorPradha": crate::emission_policy::TARGET_RESERVOIR_PRADHA,
+                    "floorPradha": floor,
+                    "emissionMonth": funding.map(|f| f.month),
+                    "emissionClock": "node-virtual-daa",
+                    "matureReservoirPradha": funding.map(|f| f.mature_pradha),
+                    "fundingVerified": funding.is_some(),
+                    "freeFundsPradha": funding.map(|f| crate::reservoir_funds::available_for_claims(f.mature_pradha, outstanding)),
+                    "operationalBufferPradha": crate::reservoir_funds::OPERATIONAL_BUFFER_PRADHA,
+                    "serviceReservePradha": s.service_reserve_pradha(),
+                    "reserveHorizonDays": crate::reservoir_funds::RESERVE_HORIZON_DAYS,
+                    "treasury": crate::treasury::status(),
                     "rewardPradha": s.reward_pradha_today(),
                     "maxRewardPradha": crate::faucet::FAUCET_MAX_REWARD_PRADHA,
                     "claimPeriodSecs": 86_400,
@@ -895,6 +971,8 @@ async fn handle_http_request(
     }
 
     if request.starts_with("POST /api/faucet/claim") {
+        let _guard = FAUCET_WITHDRAW_LOCK.lock().await;
+        refresh_faucet_funding().await;
         let body = request.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or("");
         let resp = match FAUCET_STATE.get() {
             None => serde_json::json!({ "error": "faucet not ready" }),
@@ -2260,10 +2338,12 @@ mod tests {
         let path = std::env::temp_dir().join(format!("faucet-api-{}.json", uuid::Uuid::new_v4()));
         let address = "cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6";
         let body = serde_json::json!({"address": address, "deviceId": "test-device"}).to_string();
+        state.update_funding(250_000_000_000_000, 0, 1_794_789_000);
         let first = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000);
         assert_eq!(first["rewardPradha"], 1000);
         assert_eq!(first["balancePradha"], 1000);
         assert_eq!(faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000)["errorCode"], "AlreadyClaimed");
+        state.update_funding(250_000_000_000_000, 0, 1_794_789_000 + 86_400);
         let second = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000 + 86_400);
         assert_eq!(second["rewardPradha"], 1000);
         assert_eq!(second["claimedTodayPradha"], 1000);
@@ -2279,6 +2359,7 @@ mod tests {
         let blocker = std::env::temp_dir().join(format!("faucet-api-blocker-{}", uuid::Uuid::new_v4()));
         std::fs::write(&blocker, b"existing file").unwrap();
         let body = r#"{"address":"cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6","deviceId":"device"}"#;
+        state.update_funding(250_000_000_000_000, 0, 1_794_789_000);
         let before = serde_json::to_value(&state).unwrap();
         let result = faucet_claim_response_at(&mut state, body, &blocker.join("ledger.json"), 1_794_789_000);
         assert_eq!(result["errorCode"], "PersistenceFailed");

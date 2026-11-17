@@ -15,6 +15,7 @@ pub mod pow_diagnostic;
 pub mod pplns;
 pub mod prom;
 pub mod reservoir;
+pub mod reservoir_funds;
 #[cfg(feature = "rkstratum_cpu_miner")]
 pub mod rkstratum_cpu_miner;
 pub mod share_handler;
@@ -22,6 +23,7 @@ pub mod stratum_context;
 pub mod stratum_listener;
 pub mod stratum_server;
 pub mod transfer;
+pub mod treasury;
 
 pub use app_config::{BridgeConfig, InstanceConfig};
 pub use celeniumapi::*;

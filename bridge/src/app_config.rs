@@ -45,6 +45,8 @@ pub struct GlobalConfig {
     // Pool mode (opsional): arahkan coinbase ke alamat pool & aktifkan reservoir faucet.
     pub pool_address: Option<String>,
     pub faucet_address: Option<String>,
+    pub faucet_surplus_address: Option<String>,
+    pub faucet_bootstrap_address: Option<String>,
     /// Saklar reservoir: 0 = faucet tidak didanai, >0 = aktif memakai kebijakan
     /// emisi (`emission_policy`). Nilai besarnya tidak lagi berarti: laju cut
     /// dihitung dari defisit reservoir, dibatasi `MAX_CUT_FRACTION`.
@@ -215,6 +217,8 @@ impl Default for GlobalConfig {
             coinbase_tag_suffix: None,
             pool_address: None,
             faucet_address: None,
+            faucet_surplus_address: None,
+            faucet_bootstrap_address: None,
             faucet_cut_fraction: 0.015,
             // Target reservoir nyata: 2.500.000 CEN (1 CEN = 1e8 pradha).
             // Nilai ini historis — kebijakan memakai konstanta
