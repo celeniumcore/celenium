@@ -247,6 +247,9 @@ pub struct OverrideParams {
     /// The parameter for scaling inverse CEN value to mass units (KIP-0009)
     pub storage_mass_parameter: Option<u64>,
 
+    /// Experimental denominator floor in pradha for local simnet storage-mass tests; zero preserves KIP-0009.
+    pub storage_mass_amount_floor: Option<u64>,
+
     /// DAA score after which the pre-deflationary period switches to the deflationary period
     pub deflationary_phase_daa_score: Option<u64>,
 
@@ -285,6 +288,7 @@ impl From<Params> for OverrideParams {
             block_mass_limits: Some(p.block_mass_limits),
             block_lane_limits: Some(p.block_lane_limits),
             storage_mass_parameter: Some(p.storage_mass_parameter),
+            storage_mass_amount_floor: Some(p.storage_mass_amount_floor),
             deflationary_phase_daa_score: Some(p.deflationary_phase_daa_score),
             pre_deflationary_phase_base_subsidy: Some(p.pre_deflationary_phase_base_subsidy),
             skip_proof_of_work: Some(p.skip_proof_of_work),
@@ -339,6 +343,9 @@ pub struct Params {
 
     /// The parameter for scaling inverse CEN value to mass units (KIP-0009)
     pub storage_mass_parameter: u64,
+
+    /// Experimental denominator floor in pradha for local simnet storage-mass tests; zero preserves KIP-0009.
+    pub storage_mass_amount_floor: u64,
 
     /// DAA score after which the pre-deflationary period switches to the deflationary period
     pub deflationary_phase_daa_score: u64,
@@ -517,6 +524,7 @@ impl Params {
             block_lane_limits: overrides.block_lane_limits.unwrap_or(self.block_lane_limits),
 
             storage_mass_parameter: overrides.storage_mass_parameter.unwrap_or(self.storage_mass_parameter),
+            storage_mass_amount_floor: overrides.storage_mass_amount_floor.unwrap_or(self.storage_mass_amount_floor),
 
             deflationary_phase_daa_score: overrides.deflationary_phase_daa_score.unwrap_or(self.deflationary_phase_daa_score),
 
@@ -611,6 +619,7 @@ pub const MAINNET_PARAMS: Params = Params {
     block_lane_limits: BlockLaneLimits { lanes_per_block: DEFAULT_LANES_PER_BLOCK_LIMIT, gas_per_lane: DEFAULT_GAS_PER_LANE_LIMIT },
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
+    storage_mass_amount_floor: 0,
 
     // Celenium starts in the deflationary phase at genesis, so the subsidy
     // table in coinbase.rs applies from block 0.
@@ -662,6 +671,7 @@ pub const TESTNET_PARAMS: Params = Params {
     block_lane_limits: BlockLaneLimits { lanes_per_block: DEFAULT_LANES_PER_BLOCK_LIMIT, gas_per_lane: DEFAULT_GAS_PER_LANE_LIMIT },
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
+    storage_mass_amount_floor: 0,
     // Celenium starts in the deflationary phase at genesis, so the subsidy
     // table in coinbase.rs applies from block 0.
     deflationary_phase_daa_score: 0,
@@ -707,6 +717,7 @@ pub const SIMNET_PARAMS: Params = Params {
     block_lane_limits: BlockLaneLimits { lanes_per_block: DEFAULT_LANES_PER_BLOCK_LIMIT, gas_per_lane: DEFAULT_GAS_PER_LANE_LIMIT },
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
+    storage_mass_amount_floor: 0,
 
     skip_proof_of_work: true, // For simnet only, PoW can be simulated by default
     max_block_level: 250,
@@ -747,6 +758,7 @@ pub const DEVNET_PARAMS: Params = Params {
     block_lane_limits: BlockLaneLimits { lanes_per_block: DEFAULT_LANES_PER_BLOCK_LIMIT, gas_per_lane: DEFAULT_GAS_PER_LANE_LIMIT },
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
+    storage_mass_amount_floor: 0,
 
     deflationary_phase_daa_score: 0,
     pre_deflationary_phase_base_subsidy: 2079547,
@@ -764,6 +776,22 @@ pub const DEVNET_PARAMS: Params = Params {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn storage_floor_overrides_are_optional_and_round_trip() {
+        let empty: OverrideParams = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty.storage_mass_amount_floor, None);
+        assert_eq!(SIMNET_PARAMS.override_params(empty).storage_mass_amount_floor, 0);
+        let overrides: OverrideParams = serde_json::from_str(r#"{"storage_mass_amount_floor":4000000}"#).unwrap();
+        let params = SIMNET_PARAMS.override_params(overrides);
+        assert_eq!(params.storage_mass_amount_floor, 4_000_000);
+        let round_trip: OverrideParams = serde_json::from_str(&serde_json::to_string(&OverrideParams::from(params)).unwrap()).unwrap();
+        assert_eq!(round_trip.storage_mass_amount_floor, Some(4_000_000));
+        assert_eq!(MAINNET_PARAMS.storage_mass_amount_floor, 0);
+        assert_eq!(TESTNET_PARAMS.storage_mass_amount_floor, 0);
+        assert_eq!(DEVNET_PARAMS.storage_mass_amount_floor, 0);
+        assert_eq!(SIMNET_PARAMS.storage_mass_amount_floor, 0);
+    }
 
     #[test]
     fn override_params_rejects_unknown_top_level_fields() {

@@ -513,7 +513,9 @@ fn faucet_claim_response_at(
         "rewardPradha": entry.last_claim_payout_pradha,
         "claimedTodayPradha": entry.last_claim_reward_pradha,
         "dailyRewardPradha": entry.daily_reward_pradha,
-        "startedDrip": entry.last_claim_payout_pradha == 0,
+        "rewardModel": "daily-fixed",
+        "claimPeriodSecs": 86_400,
+        "startedDrip": false,
         "serverTimeSecs": now,
     })
 }
@@ -626,39 +628,44 @@ async fn withdraw_response(body: &str) -> String {
         None => return serde_json::json!({ "error": "node api not ready" }).to_string(),
     };
 
-    // The fee is paid by the faucet reservoir, not deducted from `amount`, so a
-    // small withdrawal still delivers exactly what the ledger says.
-    let fee = match api.estimate_standard_fee().await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!("faucet withdraw: fee estimate failed: {e:#}");
-            return serde_json::json!({ "error": "cannot estimate the network fee right now" }).to_string();
-        }
-    };
-
     let reservoir_balance = match api.get_balances_by_addresses(&[payout_address.clone()]).await {
         Ok(v) => v.first().map(|(_, b)| *b).unwrap_or(0),
         Err(e) => {
-            tracing::warn!("faucet withdraw: reservoir balance query failed: {e:#}");
-            return serde_json::json!({ "error": "cannot read the faucet's on-chain balance right now" }).to_string();
+            tracing::warn!("faucet balance query failed: {e:#}");
+            return serde_json::json!({"error": "cannot read the faucet balance; retry later", "errorCode": "NodeUnavailable"})
+                .to_string();
         }
     };
-
-    if reservoir_balance < amount.saturating_add(fee) {
+    if reservoir_balance <= amount {
         return serde_json::json!({
             "error": "faucet has no on-chain funds yet",
-            "detail": "mining rewards have not filled the faucet reservoir; the ledger balance stays claimable",
+            "errorCode": "ReservoirUnfunded",
             "balancePradha": balance,
             "faucetOnChainPradha": reservoir_balance,
-            "neededPradha": amount.saturating_add(fee)
         })
         .to_string();
     }
-
-    let txid = match api.send_coins(&payout_address, &address, amount, fee, signer.secret_hex()).await {
+    let prepared = match api.prepare_transfer(&payout_address, &address, amount, signer.secret_hex()).await {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            tracing::warn!("faucet transfer preparation failed: {e:#}");
+            let message = format!("{e:#}");
+            let code =
+                if message.contains("SmallTransferNotSupported") { "SmallTransferNotSupported" } else { "TransferPreparationFailed" };
+            return serde_json::json!({ "error": message, "errorCode": code, "balancePradha": balance }).to_string();
+        }
+    };
+    let fee = prepared.fee_pradha();
+    {
+        let state = state.lock().unwrap();
+        if let Err(e) = state.check_withdraw_fee(&address, fee) {
+            return serde_json::json!({ "error": e.to_string(), "balancePradha": balance }).to_string();
+        }
+    }
+    let txid = match api.submit_prepared_transfer(prepared).await {
         Ok(txid) => txid,
         Err(e) => {
-            tracing::warn!("faucet withdraw send_coins failed for {address}: {e:#}");
+            tracing::warn!("faucet submit failed: {e:#}");
             return serde_json::json!({ "error": format!("{e:#}"), "balancePradha": balance }).to_string();
         }
     };
@@ -829,8 +836,10 @@ async fn handle_http_request(
                 serde_json::json!({
                     "rewardPradha": s.reward_pradha_today(),
                     "maxRewardPradha": crate::faucet::FAUCET_MAX_REWARD_PRADHA,
-                    "dripDurationSecs": 86_400,
-                    "dripModel": "linear-utc-day",
+                    "claimPeriodSecs": 86_400,
+                    "rewardModel": "daily-fixed",
+                    "dripDurationSecs": 0,
+                    "dripModel": "daily-fixed",
                     "claimantsToday": s.claimants_today(),
                     "expectedClaimants": s.expected_claimants_today(),
                     "dailyCapPradha": daily_cap,
@@ -2246,21 +2255,21 @@ mod tests {
     }
 
     #[test]
-    fn faucet_claim_response_persists_incremental_amounts() {
+    fn faucet_claim_response_persists_fixed_daily_amount() {
         let mut state = crate::faucet::FaucetState::default();
         let path = std::env::temp_dir().join(format!("faucet-api-{}.json", uuid::Uuid::new_v4()));
         let address = "cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6";
         let body = serde_json::json!({"address": address, "deviceId": "test-device"}).to_string();
         let first = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000);
-        assert_eq!(first["rewardPradha"], 20);
-        assert_eq!(first["balancePradha"], 20);
-        assert_eq!(faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000)["errorCode"], "NothingAccrued");
-        let second = faucet_claim_response_at(&mut state, &body, &path, 1_794_790_800);
-        assert_eq!(second["rewardPradha"], 21);
-        assert_eq!(second["claimedTodayPradha"], 41);
+        assert_eq!(first["rewardPradha"], 1000);
+        assert_eq!(first["balancePradha"], 1000);
+        assert_eq!(faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000)["errorCode"], "AlreadyClaimed");
+        let second = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000 + 86_400);
+        assert_eq!(second["rewardPradha"], 1000);
+        assert_eq!(second["claimedTodayPradha"], 1000);
         assert_eq!(second["dailyRewardPradha"], 1000);
         let loaded = crate::faucet::FaucetState::load(&path).unwrap();
-        assert_eq!(loaded.balance(address).unwrap().balance_pradha, 41);
+        assert_eq!(loaded.balance(address).unwrap().balance_pradha, 2000);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -2279,7 +2288,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn faucet_balance_http_exposes_drip_contract() {
+    async fn faucet_balance_http_exposes_fixed_daily_contract() {
         let state = std::sync::Arc::new(std::sync::Mutex::new(crate::faucet::FaucetState::default()));
         set_faucet_state(state);
         let mode = HttpMode::Aggregated { web_bind: "127.0.0.1:0".to_string() };
@@ -2287,8 +2296,9 @@ mod tests {
             "GET /api/faucet/balance?address=cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6 HTTP/1.1\r\n\r\n";
         let response = send_request(mode.clone(), request).await;
         let body: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
-        assert_eq!(body["dripDurationSecs"], 86_400);
-        assert_eq!(body["dripModel"], "linear-utc-day");
+        assert_eq!(body["claimPeriodSecs"], 86_400);
+        assert_eq!(body["rewardModel"], "daily-fixed");
+        assert_eq!(body["dripDurationSecs"], 0);
         assert!(body["dailyRewardPradha"].is_u64());
         assert!(body["serverTimeSecs"].is_u64());
         assert_eq!(body["canClaimToday"].as_bool(), Some(body["rewardPradha"].as_u64().unwrap() > 0));
@@ -2296,7 +2306,7 @@ mod tests {
         let response = send_request(mode.clone(), &encoded).await;
         let encoded_body: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
         assert_eq!(encoded_body["address"], body["address"]);
-        assert_eq!(encoded_body["dripDurationSecs"], 86_400);
+        assert_eq!(encoded_body["rewardModel"], "daily-fixed");
         let double_encoded = request.replace("cen69:", "cen69%253A");
         let response = send_request(mode.clone(), &double_encoded).await;
         assert!(response.contains("InvalidAddress"));

@@ -1,22 +1,10 @@
-//! Faucet klaim reward bertahap: buku besar off-chain partisipasi.
-//!
-//! Setiap alamat punya kuota harian dinamis dengan plafon
-//! `FAUCET_MAX_REWARD_PRADHA`. Kuota itu terakru linear dari pukul 00:00 sampai
-//! 24:00 UTC, dan klaim berulang hanya mengambil akrual yang belum dibayar.
-//! Saldo tetap off-chain sampai user menariknya on-chain; lihat
-//! `docs/faucet-reservoir-spec.md`.
-//!
-//! Akuntansi memakai pradha (1 CEN = 1e8 pradha) agar integer, tanpa float.
+//! Faucet partisipasi: kuota 1.000 pradha per alamat per hari UTC.
+//! Klaim mencatat saldo off-chain; penarikan memerlukan dana reservoir on-chain.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-/// Hadiah partisipasi **maksimum** per klaim harian (pradha; 1 CEN = 1e8 pradha).
-///
-/// 1000 pradha = 0,00001 CEN per perangkat per hari. Ini plafon, bukan janji:
-/// reward yang benar-benar dibayar menyusut ketika peserta bertambah, karena
-/// anggaran harian dibagi rata ke jumlah peserta yang terukur
-/// (lihat [`FaucetState::reward_pradha_today`]).
+/// Kuota harian tetap dalam pradha (1 CEN = 100.000.000 pradha).
 pub const FAUCET_MAX_REWARD_PRADHA: u64 = 1_000;
 
 /// Batas total kewajiban ledger (semua saldo yang belum ditarik), dalam pradha.
@@ -56,12 +44,7 @@ pub const FAUCET_DAILY_FEE_BUDGET_PRADHA: u64 = 250_000_000;
 /// harian; fee jaringan tetap dibayar reservoir.
 pub const FAUCET_MIN_WITHDRAW_PRADHA: u64 = 1_000;
 
-/// Reward minimum per klaim, dalam pradha.
-///
-/// Pradha adalah satuan terkecil, jadi 1 adalah lantai mutlak. Nilai ini hanya
-/// terpakai ketika anggaran harian lebih kecil daripada jumlah peserta: pada
-/// titik itu yang dibatasi adalah **jumlah klaim terlayani**, bukan nilai per
-/// klaim.
+/// Nilai minimum kuota legacy; mode harian tetap memakai 1.000 pradha.
 pub const FAUCET_MIN_REWARD_PRADHA: u64 = 1;
 
 /// Detik per hari (hari Unix untuk throttling klaim).
@@ -117,9 +100,7 @@ pub struct FaucetState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClaimError {
-    /// Belum ada porsi yang terakru sejak 00:00 UTC, atau porsi hari ini
-    /// seluruhnya sudah diambil.
-    NothingAccrued,
+    AlreadyClaimed,
     StorageUnavailable,
     DailyCapReached,
     ReservoirFull,
@@ -131,7 +112,7 @@ pub enum ClaimError {
 impl std::fmt::Display for ClaimError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            ClaimError::NothingAccrued => "no reward accrued yet; it drips in over 24h from 00:00 UTC",
+            ClaimError::AlreadyClaimed => "daily reward already claimed; try again after 00:00 UTC",
             ClaimError::StorageUnavailable => "faucet storage needs recovery; retry after the operator restores it",
             ClaimError::DailyCapReached => "daily faucet cap reached",
             ClaimError::ReservoirFull => "faucet liability cap reached",
@@ -146,7 +127,7 @@ impl std::fmt::Display for ClaimError {
 impl ClaimError {
     pub fn code(self) -> &'static str {
         match self {
-            Self::NothingAccrued => "NothingAccrued",
+            Self::AlreadyClaimed => "AlreadyClaimed",
             Self::StorageUnavailable => "StorageUnavailable",
             Self::DailyCapReached => "DailyCapReached",
             Self::ReservoirFull => "ReservoirFull",
@@ -215,33 +196,9 @@ impl FaucetState {
         current.max(previous).max(1)
     }
 
-    /// Kuota penuh untuk alamat baru; akrual dihitung terpisah.
     pub fn reward_pradha_today(&self) -> u64 {
-        self.new_daily_quota_at(Self::now_secs())
-    }
-
-    fn new_daily_quota_at(&self, now: u64) -> u64 {
-        let day = now / DAY_SECS;
-        let month = crate::emission_policy::month_since_genesis(now);
-        let cap = crate::emission_policy::daily_cap_pradha(month);
-        let used = if day == self.claim_day { self.claimed_today } else { 0 };
-        let remaining = cap.saturating_sub(used);
-        if remaining == 0 {
-            return 0;
-        }
-        let (current, previous) = self.demand_at(now);
-        let slots = current.max(previous).max(1).saturating_sub(current).max(1);
-        (remaining / slots).clamp(FAUCET_MIN_REWARD_PRADHA, FAUCET_MAX_REWARD_PRADHA)
-    }
-
-    fn daily_quota_for(&self, address: &str, now: u64) -> u64 {
-        if let Some(entry) = self.balance(address)
-            && entry.last_claim_day == now / DAY_SECS
-        {
-            // Ledger lama membayar seluruh kuota dalam satu klaim.
-            return if entry.daily_reward_pradha > 0 { entry.daily_reward_pradha } else { entry.last_claim_reward_pradha };
-        }
-        self.new_daily_quota_at(now)
+        let cap = self.daily_cap_now();
+        if cap.saturating_sub(self.claimed_today()) >= FAUCET_MAX_REWARD_PRADHA { FAUCET_MAX_REWARD_PRADHA } else { 0 }
     }
 
     pub fn validate_address(address: &str) -> Result<(), ClaimError> {
@@ -257,8 +214,9 @@ impl FaucetState {
 
     fn claim_amounts_at(&self, address: &str, now: u64) -> ClaimAmounts {
         let day = now / DAY_SECS;
-        let quota = self.daily_quota_for(address, now);
+        let quota = FAUCET_MAX_REWARD_PRADHA;
         let entry = self.balance(address);
+        // Entri sebelum drip sudah menerima satu klaim penuh, meski nominalnya tidak disimpan.
         let paid = entry
             .filter(|e| e.last_claim_day == day)
             .map(|e| if e.daily_reward_pradha == 0 { quota } else { e.last_claim_reward_pradha })
@@ -267,8 +225,7 @@ impl FaucetState {
             .filter(|e| e.last_claim_day < day && e.daily_reward_pradha > 0)
             .map(|e| e.daily_reward_pradha.saturating_sub(e.last_claim_reward_pradha))
             .unwrap_or(0);
-        let accrued = (u128::from(quota) * u128::from(now % DAY_SECS) / u128::from(DAY_SECS)) as u64;
-        ClaimAmounts { quota, accrued, paid, pending, payout: pending.saturating_add(accrued.saturating_sub(paid)) }
+        ClaimAmounts { quota, accrued: quota, paid, pending, payout: pending.saturating_add(quota.saturating_sub(paid)) }
     }
 
     fn check_payout_at(&self, address: &str, now: u64, payout: u64) -> Result<(), ClaimError> {
@@ -279,7 +236,7 @@ impl FaucetState {
         let day = now / DAY_SECS;
         // Jangan membuka ulang hari yang sudah dilewati setelah koreksi jam server.
         if day < self.claim_day || self.balance(address).is_some_and(|e| e.last_claim_day > day) {
-            return Err(ClaimError::NothingAccrued);
+            return Err(ClaimError::AlreadyClaimed);
         }
         let month = crate::emission_policy::month_since_genesis(now);
         let daily_cap = crate::emission_policy::daily_cap_pradha(month);
@@ -293,7 +250,7 @@ impl FaucetState {
             return Err(ClaimError::ReservoirFull);
         }
         if payout == 0 {
-            return Err(ClaimError::NothingAccrued);
+            return Err(ClaimError::AlreadyClaimed);
         }
         Ok(())
     }
@@ -305,12 +262,6 @@ impl FaucetState {
     fn claimable_at(&self, address: &str, now: u64) -> u64 {
         let amount = self.claim_amounts_at(address, now).payout;
         if self.check_payout_at(address, now, amount).is_ok() { amount } else { 0 }
-    }
-
-    fn can_start_drip_at(&self, address: &str, now: u64) -> bool {
-        self.daily_quota_for(address, now) == FAUCET_MIN_REWARD_PRADHA
-            && self.balance(address).is_none_or(|e| e.last_claim_day < now / DAY_SECS)
-            && self.check_payout_at(address, now, FAUCET_MIN_REWARD_PRADHA).is_ok()
     }
 
     pub fn balance_response(&self, address: &str, now: u64) -> serde_json::Value {
@@ -330,10 +281,12 @@ impl FaucetState {
             "claimedTodayPradha": amounts.paid,
             "pendingPreviousPradha": amounts.pending,
             "canClaimToday": reward > 0,
-            "canStartDrip": reward == 0 && self.can_start_drip_at(address, now),
+            "canStartDrip": false,
             "serverTimeSecs": now,
-            "dripDurationSecs": DAY_SECS,
-            "dripModel": "linear-utc-day",
+            "claimPeriodSecs": DAY_SECS,
+            "rewardModel": "daily-fixed",
+            "dripDurationSecs": 0,
+            "dripModel": "daily-fixed",
         })
     }
 
@@ -350,9 +303,7 @@ impl FaucetState {
             return Err(ClaimError::TooManyAccounts);
         }
         let amounts = self.claim_amounts_at(address, now);
-        if !(amounts.payout == 0 && self.can_start_drip_at(address, now)) {
-            self.check_payout_at(address, now, amounts.payout)?;
-        }
+        self.check_payout_at(address, now, amounts.payout)?;
         let day = now / DAY_SECS;
         let first_today = self.balance(address).is_none_or(|e| e.last_claim_day != day);
         self.roll_day_at(now);
@@ -434,6 +385,15 @@ impl FaucetState {
             if elapsed < FAUCET_WITHDRAW_COOLDOWN_SECS {
                 return Err(WithdrawError::Cooldown { remaining_secs: FAUCET_WITHDRAW_COOLDOWN_SECS.saturating_sub(elapsed) });
             }
+        }
+        Ok(())
+    }
+
+    pub fn check_withdraw_fee(&self, address: &str, fee_pradha: u64) -> Result<(), WithdrawError> {
+        self.check_withdraw(address)?;
+        let used = if self.fee_day == Self::current_day() { self.fees_today_pradha } else { 0 };
+        if fee_pradha > FAUCET_DAILY_FEE_BUDGET_PRADHA.saturating_sub(used) {
+            return Err(WithdrawError::FeeBudgetExhausted { used_pradha: used, budget_pradha: FAUCET_DAILY_FEE_BUDGET_PRADHA });
         }
         Ok(())
     }
@@ -565,6 +525,63 @@ mod tests {
     const START: u64 = 1_794_787_200;
 
     #[test]
+    fn fixed_daily_claim_pays_1000_at_any_time_of_day() {
+        for elapsed in [0, 1, 1800, 43_200, 86_399] {
+            let mut s = FaucetState::default();
+            let entry = s.claim_at(ADDR, "device", START + elapsed).unwrap();
+            assert_eq!(entry.last_claim_payout_pradha, 1000);
+            assert_eq!(entry.balance_pradha, 1000);
+            assert_eq!(s.claimed_today, 1000);
+            assert_eq!(s.claimants_today, 1);
+            assert!(s.claim_at(ADDR, "device", START + elapsed).is_err());
+            assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 1000);
+        }
+    }
+
+    #[test]
+    fn fixed_daily_claim_tops_up_existing_partial_drip_once() {
+        let mut s = FaucetState::default();
+        s.claim_day = START / DAY_SECS;
+        s.claimed_today = 20;
+        s.claimants_today = 1;
+        s.ledger.insert(
+            ADDR.into(),
+            FaucetEntry {
+                balance_pradha: 20,
+                total_claimed_pradha: 20,
+                last_claim_day: START / DAY_SECS,
+                last_claim_reward_pradha: 20,
+                daily_reward_pradha: 1000,
+                last_claim_payout_pradha: 20,
+                last_withdraw_secs: 0,
+            },
+        );
+        assert_eq!(s.claimable_at(ADDR, START + 1800), 980);
+        let entry = s.claim_at(ADDR, "device", START + 1800).unwrap();
+        assert_eq!(entry.balance_pradha, 1000);
+        assert_eq!(entry.last_claim_payout_pradha, 980);
+        assert_eq!(s.claimants_today, 1);
+        assert!(s.claim_at(ADDR, "device", START + 3600).is_err());
+    }
+
+    #[test]
+    fn fixed_daily_reward_does_not_shrink_with_participant_count() {
+        let mut s = FaucetState::default();
+        s.claim_day = START / DAY_SECS;
+        s.last_day_claimants = u64::MAX;
+        assert_eq!(s.claim_at(ADDR, "device", START + 1800).unwrap().last_claim_payout_pradha, 1000);
+    }
+
+    #[test]
+    fn fixed_daily_claim_rejects_short_budget_without_partial_credit() {
+        let mut s = FaucetState::default();
+        s.claim_day = START / DAY_SECS;
+        s.claimed_today = crate::emission_policy::daily_cap_pradha(0) - 999;
+        assert_eq!(s.claim_at(ADDR, "device", START + 43_200), Err(ClaimError::DailyCapReached));
+        assert!(s.is_empty());
+    }
+
+    #[test]
     fn preview_stops_when_daily_budget_is_exhausted() {
         let mut s = FaucetState::default();
         s.claim_day = START / DAY_SECS;
@@ -592,14 +609,16 @@ mod tests {
         });
         let mut s: FaucetState = serde_json::from_value(fixture).unwrap();
         assert_eq!(s.claimable_at(ADDR, START + 43_200), 0);
-        assert_eq!(s.claim_at(ADDR, "device", START + 43_200), Err(ClaimError::NothingAccrued));
+        assert_eq!(s.claim_at(ADDR, "device", START + 43_200), Err(ClaimError::AlreadyClaimed));
         assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 1000);
     }
 
     #[test]
     fn failed_claim_does_not_register_a_device() {
         let mut s = FaucetState::default();
-        assert_eq!(s.claim_at(ADDR, "device", START), Err(ClaimError::NothingAccrued));
+        s.claim_day = START / DAY_SECS;
+        s.claimed_today = crate::emission_policy::daily_cap_pradha(0);
+        assert_eq!(s.claim_at(ADDR, "device", START), Err(ClaimError::DailyCapReached));
         assert!(s.devices.is_empty());
     }
 
@@ -623,16 +642,23 @@ mod tests {
     }
 
     #[test]
-    fn partial_claim_reaches_daily_quota_after_midnight() {
+    fn previous_drip_remainder_is_preserved_with_new_daily_claim() {
         let mut s = FaucetState::default();
-        assert_eq!(s.claim_at(ADDR, "device", START + 43_200).unwrap().balance_pradha, 500);
+        s.ledger.insert(
+            ADDR.into(),
+            FaucetEntry {
+                balance_pradha: 500,
+                total_claimed_pradha: 500,
+                last_claim_day: START / DAY_SECS,
+                last_claim_reward_pradha: 500,
+                daily_reward_pradha: 1000,
+                ..Default::default()
+            },
+        );
         let next = s.claim_at(ADDR, "device", START + DAY_SECS).unwrap();
-        assert_eq!(next.last_claim_payout_pradha, 500);
-        assert_eq!(next.balance_pradha, 1000);
-        assert_eq!(s.claim_at(ADDR, "device", START + DAY_SECS), Err(ClaimError::NothingAccrued));
-        let later = s.claim_at(ADDR, "device", START + DAY_SECS + 1800).unwrap();
-        assert_eq!(later.last_claim_payout_pradha, 20);
-        assert_eq!(later.balance_pradha, 1020);
+        assert_eq!(next.last_claim_payout_pradha, 1500);
+        assert_eq!(next.balance_pradha, 2000);
+        assert_eq!(s.claim_at(ADDR, "device", START + DAY_SECS), Err(ClaimError::AlreadyClaimed));
     }
 
     #[test]
@@ -645,14 +671,14 @@ mod tests {
     }
 
     #[test]
-    fn save_can_be_reloaded_after_partial_claim_without_double_credit() {
-        let path = std::env::temp_dir().join(format!("faucet-drip-{}.json", uuid::Uuid::new_v4()));
+    fn save_can_be_reloaded_after_claim_without_double_credit() {
+        let path = std::env::temp_dir().join(format!("faucet-fixed-{}.json", uuid::Uuid::new_v4()));
         let mut s = FaucetState::default();
         s.claim_at(ADDR, "device", START + 1800).unwrap();
         s.save(&path).unwrap();
         let mut loaded = FaucetState::load(&path).unwrap();
-        assert_eq!(loaded.claim_at(ADDR, "device", START + 1800), Err(ClaimError::NothingAccrued));
-        assert_eq!(loaded.claim_at(ADDR, "device", START + 3600).unwrap().balance_pradha, 41);
+        assert_eq!(loaded.claim_at(ADDR, "device", START + 3600), Err(ClaimError::AlreadyClaimed));
+        assert_eq!(loaded.claim_at(ADDR, "device", START + DAY_SECS).unwrap().balance_pradha, 2000);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -664,84 +690,54 @@ mod tests {
         let result = s.save_with_directory_sync(&path, |_| Err(std::io::Error::other("injected directory sync failure")));
         assert!(result.is_err());
         assert!(s.storage_uncertain);
-        assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 20);
-        assert_eq!(FaucetState::load(&path).unwrap().balance(ADDR).unwrap().balance_pradha, 20);
+        assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 1000);
+        assert_eq!(FaucetState::load(&path).unwrap().balance(ADDR).unwrap().balance_pradha, 1000);
         assert_eq!(s.claim_at(ADDR, "device", START + 3600), Err(ClaimError::StorageUnavailable));
         assert_eq!(s.check_withdraw(ADDR), Err(WithdrawError::StorageUnavailable));
         s.save(&path).unwrap();
         assert!(!s.storage_uncertain);
-        assert_eq!(s.claim_at(ADDR, "device", START + 3600).unwrap().balance_pradha, 41);
+        assert_eq!(s.claim_at(ADDR, "device", START + DAY_SECS).unwrap().balance_pradha, 2000);
         std::fs::remove_file(path).unwrap();
     }
 
     #[test]
-    fn minimum_daily_quota_can_start_without_inventing_credit() {
+    fn zero_credit_drip_enrollment_can_claim_full_daily_reward() {
         let mut s = FaucetState::default();
         s.claim_day = START / DAY_SECS;
-        s.last_day_claimants = u64::MAX;
-        let response = s.balance_response(ADDR, START + 43_200);
-        assert_eq!(response["canStartDrip"], true);
-        assert_eq!(response["canClaimToday"], false);
-        let enrolled = s.claim_at(ADDR, "device", START + 43_200).unwrap();
-        assert_eq!(enrolled.daily_reward_pradha, 1);
-        assert_eq!(enrolled.balance_pradha, 0);
+        s.claimants_today = 1;
+        s.ledger.insert(ADDR.into(), FaucetEntry { last_claim_day: START / DAY_SECS, daily_reward_pradha: 1, ..Default::default() });
+        let response = s.balance_response(ADDR, START);
+        assert_eq!(response["canStartDrip"], false);
+        assert_eq!(response["rewardModel"], "daily-fixed");
+        assert_eq!(response["rewardPradha"], 1000);
+        assert_eq!(s.claim_at(ADDR, "device", START).unwrap().balance_pradha, 1000);
         assert_eq!(s.claimants_today, 1);
-        assert_eq!(s.claim_at(ADDR, "device", START + 43_200), Err(ClaimError::NothingAccrued));
-        assert_eq!(s.claim_at(ADDR, "device", START + DAY_SECS).unwrap().last_claim_payout_pradha, 1);
     }
 
     #[test]
-    fn no_credit_before_one_whole_pradha_accrues() {
+    fn fixed_claim_is_available_at_midnight_without_waiting() {
         let mut s = FaucetState::default();
-        let day = START / DAY_SECS;
-        s.ledger.insert(
-            ADDR.to_string(),
-            FaucetEntry {
-                balance_pradha: 0,
-                last_claim_day: day.saturating_sub(1),
-                total_claimed_pradha: 0,
-                last_claim_reward_pradha: 0,
-                daily_reward_pradha: 0,
-                last_claim_payout_pradha: 0,
-                last_withdraw_secs: 0,
-            },
-        );
-        assert_eq!(s.claim_at(ADDR, "", day * DAY_SECS + 1), Err(ClaimError::NothingAccrued));
+        assert_eq!(s.balance_response(ADDR, START)["rewardPradha"], 1000);
+        assert_eq!(s.claim_at(ADDR, "device", START).unwrap().balance_pradha, 1000);
     }
 
     #[test]
-    fn claims_accumulate_linearly_and_can_be_repeated() {
+    fn fixed_claim_is_once_per_day_and_returns_next_day() {
         let mut s = FaucetState::default();
-        let day = START / DAY_SECS;
-        s.claim_day = day;
-        let quota = s.daily_quota_for(ADDR, day * DAY_SECS + DAY_SECS / 2);
-        assert!(quota > 0);
-        assert_eq!(s.claimable_at(ADDR, day * DAY_SECS + DAY_SECS / 2), quota / 2);
-        let first = s.claim_at(ADDR, "", day * DAY_SECS + DAY_SECS / 4).unwrap();
-        assert_eq!(first.balance_pradha, quota / 4);
-        assert_eq!(first.last_claim_payout_pradha, quota / 4);
-        assert_eq!(s.claimable_at(ADDR, day * DAY_SECS + DAY_SECS / 2), quota / 4);
-        let second = s.claim_at(ADDR, "", day * DAY_SECS + DAY_SECS / 2).unwrap();
-        assert_eq!(second.balance_pradha, quota / 2);
-        assert_eq!(second.last_claim_reward_pradha, quota / 2);
-        assert_eq!(second.last_claim_payout_pradha, quota / 4);
-        assert_eq!(s.claim_at(ADDR, "", day * DAY_SECS + DAY_SECS / 2), Err(ClaimError::NothingAccrued));
-        let final_claim = s.claim_at(ADDR, "", day * DAY_SECS + DAY_SECS - 1).unwrap();
-        assert!(final_claim.last_claim_reward_pradha >= quota.saturating_sub(1));
-        assert_eq!(final_claim.balance_pradha, final_claim.last_claim_reward_pradha);
+        assert_eq!(s.claim_at(ADDR, "device", START + 1).unwrap().balance_pradha, 1000);
+        assert_eq!(s.claim_at(ADDR, "device", START + 43_200), Err(ClaimError::AlreadyClaimed));
+        assert_eq!(s.claim_at(ADDR, "device", START + DAY_SECS - 1), Err(ClaimError::AlreadyClaimed));
+        assert_eq!(s.claim_at(ADDR, "device", START + DAY_SECS).unwrap().balance_pradha, 2000);
+        assert_eq!(s.claimants_today, 1);
     }
 
     #[test]
-    fn new_address_has_no_reward_before_elapsed_time() {
+    fn withdrawal_does_not_make_the_daily_reward_claimable_again() {
         let mut s = FaucetState::default();
-        let day = START / DAY_SECS;
-        assert_eq!(s.claim_at(ADDR, "", day * DAY_SECS).unwrap_err(), ClaimError::NothingAccrued);
-        let first = s.claim_at(ADDR, "", day * DAY_SECS + 30 * 60).unwrap();
-        assert_eq!(first.last_claim_payout_pradha, 20);
-        let second = s.claim_at(ADDR, "", day * DAY_SECS + 60 * 60).unwrap();
-        assert_eq!(second.last_claim_payout_pradha, 21);
-        assert_eq!(second.balance_pradha, 41);
-        assert!(s.claim_at(ADDR, "", day * DAY_SECS + DAY_SECS / 2).is_ok());
+        s.claim_at(ADDR, "device", START).unwrap();
+        assert!(s.debit(ADDR, 1000));
+        assert_eq!(s.claim_at(ADDR, "device", START + 1800), Err(ClaimError::AlreadyClaimed));
+        assert_eq!(s.balance(ADDR).unwrap().balance_pradha, 0);
     }
 
     #[test]
@@ -760,8 +756,8 @@ mod tests {
             },
         );
         let next = s.claim_at(ADDR, "", 11 * DAY_SECS + DAY_SECS / 2).unwrap();
-        assert_eq!(next.balance_pradha, 1500);
-        assert_eq!(next.last_claim_reward_pradha, 500);
+        assert_eq!(next.balance_pradha, 2000);
+        assert_eq!(next.last_claim_reward_pradha, 1000);
         assert_eq!(next.daily_reward_pradha, 1000);
     }
 
@@ -915,6 +911,16 @@ mod tests {
     }
 
     #[test]
+    fn withdraw_fee_check_rejects_when_actual_fee_exceeds_remaining_budget() {
+        let mut s = FaucetState::default();
+        s.fee_day = FaucetState::current_day();
+        s.fees_today_pradha = FAUCET_DAILY_FEE_BUDGET_PRADHA - 500;
+        assert!(s.check_withdraw_fee(ADDR, 500).is_ok());
+        assert!(matches!(s.check_withdraw_fee(ADDR, 501), Err(WithdrawError::FeeBudgetExhausted { .. })));
+        assert_eq!(s.fees_today_pradha, FAUCET_DAILY_FEE_BUDGET_PRADHA - 500);
+    }
+
+    #[test]
     fn withdraw_cooldown_blocks_repeat() {
         let mut s = FaucetState::default();
         s.ledger.insert(
@@ -972,37 +978,16 @@ mod tests {
         );
     }
 
-    /// Reward maximum 1000 pradha hanya berlaku saat peserta sedikit.
-    /// Pada 2.025.000.000 peserta (seperempat penduduk bumi) yang memakai
-    /// Android, reward harus menyusut proporsional — inilah yang membuat angka
-    /// 1000 pradha sebuah *plafon*, bukan janji.
     #[test]
-    fn reward_shrinks_as_participants_grow() {
+    fn fixed_reward_uses_budget_as_a_cap_not_a_divisor() {
         let mut s = FaucetState::default();
         s.claim_day = FaucetState::current_day();
-        s.last_day_claimants = 0;
-        assert_eq!(s.reward_pradha_today(), FAUCET_MAX_REWARD_PRADHA);
-
-        // Cap inflow berkelanjutan ~1.078e8 pradha/hari, jadi plafon 1000 pradha
-        // masih penuh sampai ~107.8 juta peserta/hari. Di atas ambang itu reward
-        // harus menyusut proporsional agar total payout tidak melewati cap.
-        s.last_day_claimants = 200_000_000;
-        let r = s.reward_pradha_today();
-        assert!(r < FAUCET_MAX_REWARD_PRADHA, "reward = {r}, harus menyusut");
-        assert!(r >= FAUCET_MIN_REWARD_PRADHA, "reward = {r}");
-
-        // 2,025 miliar peserta (seperempat penduduk bumi): reward = cap / N.
-        // Dengan cap inflow bulan ini, ini jauh di bawah plafon tetapi (selama
-        // cap >= N) masih > 1 pradha — artinya setiap peserta mendapat bagian
-        // proporsional dan total payout tetap <= cap. "Lantai 1 pradha" hanya
-        // tercapai ketika peserta melebihi sisa anggaran dalam satuan pradha.
-        s.last_day_claimants = 2_025_000_000;
-        let cap = s.daily_cap_now();
-        let r = s.reward_pradha_today();
-        let expected = (cap / 2_025_000_000).max(FAUCET_MIN_REWARD_PRADHA).min(FAUCET_MAX_REWARD_PRADHA);
-        assert_eq!(r, expected, "reward harus proporsional: cap={cap}");
-        assert!(r < FAUCET_MAX_REWARD_PRADHA);
-        assert!(r >= FAUCET_MIN_REWARD_PRADHA);
+        for participants in [0, 200_000_000, 2_025_000_000, u64::MAX] {
+            s.last_day_claimants = participants;
+            assert_eq!(s.reward_pradha_today(), 1000);
+        }
+        s.claimed_today = s.daily_cap_now() - 999;
+        assert_eq!(s.reward_pradha_today(), 0);
     }
 
     #[test]
