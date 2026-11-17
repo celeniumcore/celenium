@@ -1,0 +1,13 @@
+test_cli_json_and_csv_modes_match (test_mining_reserve.MiningReserveTests.test_cli_json_and_csv_modes_match) ... ok
+test_cli_json_reports_allocation_and_verified_totals (test_mining_reserve.MiningReserveTests.test_cli_json_reports_allocation_and_verified_totals) ... ok
+test_exact_schedule_boundaries_exclude_genesis_weight (test_mining_reserve.MiningReserveTests.test_exact_schedule_boundaries_exclude_genesis_weight) ... ok
+test_loads_exact_legacy_table_from_repository (test_mining_reserve.MiningReserveTests.test_loads_exact_legacy_table_from_repository) ... ok
+test_month_intervals_prove_conservation_and_per_block_cap (test_mining_reserve.MiningReserveTests.test_month_intervals_prove_conservation_and_per_block_cap) ... ok
+test_parser_rejects_malformed_or_non_halving_tables (test_mining_reserve.MiningReserveTests.test_parser_rejects_malformed_or_non_halving_tables) ... ok
+test_reserve_targets_follow_remaining_legacy_at_month_boundaries (test_mining_reserve.MiningReserveTests.test_reserve_targets_follow_remaining_legacy_at_month_boundaries) ... ok
+test_schedule_rejects_negative_or_noninteger_indices (test_mining_reserve.MiningReserveTests.test_schedule_rejects_negative_or_noninteger_indices) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.859s
+
+OK

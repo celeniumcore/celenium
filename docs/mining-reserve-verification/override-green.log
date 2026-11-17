@@ -1,0 +1,12 @@
+   Compiling celenium-consensus-core v2.1.0 (/home/dx401/celenium-build/consensus/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.13s
+     Running unittests src/lib.rs (target/debug/deps/celenium_consensus_core-9da5b2abd896f603)
+
+running 5 tests
+test config::params::tests::reserve_overrides_cannot_reset_mainnet - should panic ... ok
+test config::params::tests::reserve_overrides_reject_changed_blockrate - should panic ... ok
+test config::params::tests::reserve_overrides_reject_duplicate_destinations - should panic ... ok
+test config::params::tests::reserve_overrides_cannot_bypass_schedule_checks_on_a_second_call - should panic ... ok
+test config::params::tests::reserve_overrides_change_only_opted_in_simnet ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.00s

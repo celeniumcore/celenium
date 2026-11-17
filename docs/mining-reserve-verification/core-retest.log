@@ -1,0 +1,85 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.02s
+     Running unittests src/lib.rs (target/debug/deps/celenium_consensus_core-9da5b2abd896f603)
+
+running 79 tests
+test config::bps::tests::gen_ghostdag_table ... ignored
+test api::args::tests::batch_args_default_hasher_is_random_state ... ok
+test config::constants::tests::test_difficulty_max_consts ... ok
+test config::mining_reserve::tests::every_month_telescopes_to_fifty_million_without_exceeding_legacy_rewards ... ok
+test config::mining_reserve::tests::reserve_and_future_mining_preserve_the_budget_exactly ... ok
+test config::genesis::tests::test_genesis_hashes ... ok
+test config::params::tests::override_params_rejects_unknown_nested_mass_limit_fields ... ok
+test config::params::tests::override_params_rejects_unknown_nested_blockrate_fields ... ok
+test config::params::tests::override_params_rejects_unknown_top_level_fields ... ok
+test config::genesis::tests::reserve_allocation_creates_real_outputs_and_changes_chain_identity ... ok
+test config::params::tests::reserve_overrides_cannot_bypass_schedule_checks_on_a_second_call - should panic ... ok
+test config::params::tests::reserve_overrides_cannot_reset_mainnet - should panic ... ok
+test config::params::tests::reserve_overrides_reject_changed_blockrate - should panic ... ok
+test config::params::tests::storage_floor_overrides_are_optional_and_round_trip ... ok
+test config::params::tests::reserve_overrides_reject_duplicate_destinations - should panic ... ok
+test hashing::header::tests::test_hash_blue_work ... ok
+test hashing::header::tests::test_header_hashing ... ok
+test hashing::sighash_type::tests::test_display ... ok
+test hashing::tx::tests::test_transaction_hashing ... ok
+test hashing::sighash::tests::test_signature_hash ... ok
+test hashing::tx::tests::test_zero_payload_digest ... ok
+test header::tests::compressed_parents_accepts_maximum_parent_count ... ok
+test header::tests::compressed_parents_binary_format_matches_runs ... ok
+test header::tests::compressed_parents_len_and_get ... ok
+test header::tests::parents_vrle_round_trip_empty ... ok
+test header::tests::parents_vrle_round_trip_multiple_runs ... ok
+test header::tests::parents_vrle_round_trip_single_run ... ok
+test config::genesis::tests::print_genesis_regeneration_values ... ok
+test header::tests::test_compressed_parents_push ... ok
+test mass::tests::opt_in_storage_floor_allows_small_outputs_without_changing_values ... ok
+test header::tests::test_header_ser ... ok
+test config::params::tests::reserve_overrides_change_only_opted_in_simnet ... ok
+test mass::tests::storage_floor_caps_standard_output_cost_without_removing_the_block_limit ... ok
+test mass::tests::storage_floor_preserves_large_values_and_script_plurality_costs ... ok
+test mass::tests::storage_floor_charges_each_net_new_small_output ... ok
+test mass::tests::storage_floor_rejects_effective_input_sum_overflow ... ok
+test mass::tests::storage_floor_rejects_mainnet_activation - should panic ... ok
+test mass::tests::storage_floor_zero_preserves_all_network_defaults ... ok
+test mass::tests::test_mass_cofactors ... ok
+test mass::tests::test_normalized_max_ranking ... ok
+test mass::tests::test_storage_mass ... ok
+test mass::tests::test_storage_mass_pluralities ... ok
+test mass::tests::verify_utxo_plurality_limits ... ok
+test mass::units::tests::checked_covering_script_units_respects_free_allowance_boundaries ... ok
+test mass::units::tests::checked_covering_script_units_returns_none_on_budget_overflow ... ok
+test merkle::tests::merkle_root_test ... ok
+test network::tests::test_network_id_parse ... ok
+test network::tests::test_network_id_parse_roundtrip ... ok
+test tests::test_block_hasher ... ok
+test tx::script_public_key::tests::test_spk_borsh ... ok
+test tx::script_public_key::tests::test_spk_serde_json ... ok
+test tx::tests::json_transaction_deserialize_accepts_fields_before_version ... ok
+test tx::tests::test_populate_genesis_covenants ... ok
+test tx::tests::test_spk_borsh ... ok
+test tx::tests::test_spk_serde_json ... ok
+test tx::tests::test_transaction_bincode ... ok
+test sign::tests::test_signers_assign_version_appropriate_input_mass ... ok
+test tx::tests::test_transaction_json ... ok
+test tx::tests::test_transaction_toml_v0 ... ok
+test tx::tests::test_transaction_v1_bincode ... ok
+test tx::tests::test_transaction_v1_json ... ok
+test tx::tests::test_transaction_toml_v1 ... ok
+test tx::tests::test_transaction_yaml_v0 ... ok
+test tx::tests::test_transaction_yaml_v1 ... ok
+test utxo::pre_toccata::tests::pre_toccata_entry_decodes_as_post_toccata ... ok
+test utxo::pre_toccata::tests::pre_toccata_diff_via_shadow_yields_post_toccata ... ok
+test utxo::pre_toccata::tests::pre_toccata_entry_self_roundtrip ... ok
+test header::tests::compressed_parents_rejects_oversized_parents ... ok
+test utxo::utxo_diff::tests::decode_pre_toccata_utxo_diff_fixture ... ok
+test utxo::utxo_entry::tests::bincode_roundtrip_post_toccata ... ok
+test utxo::utxo_entry::tests::bincode_roundtrip_pre_toccata ... ok
+test utxo::utxo_entry::tests::decode_post_toccata_none ... ok
+test utxo::utxo_entry::tests::decode_post_toccata_some ... ok
+test utxo::utxo_diff::tests::test_utxo_diff_rules ... ok
+test utxo::utxo_entry::tests::decode_pre_toccata ... ok
+test utxo::utxo_entry::tests::json_roundtrip_with_covenant ... ok
+test utxo::utxo_entry::tests::json_roundtrip_without_covenant ... ok
+test utxo::utxo_entry::tests::pre_toccata_hex_decodes_as_pre_toccata_entry ... ok
+test sign::tests::test_and_verify_sign ... ok
+
+test result: ok. 78 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.08s

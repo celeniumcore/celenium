@@ -1,0 +1,100 @@
+   Compiling celenium-consensus v2.1.0 (/home/dx401/celenium-build/consensus)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 34s
+     Running unittests src/lib.rs (target/debug/deps/celenium_consensus-877598ae36d9e435)
+
+running 80 tests
+test model::services::reachability::tests::test_iterator_boundaries ... ok
+test model::services::reachability::tests::test_forward_iterator ... ok
+test model::stores::ghostdag::tests::test_mergeset_iterators ... ok
+test model::stores::reachability::tests::test_store_basics ... ok
+test model::stores::relations::tests::test_memory_relations_store ... ok
+test model::stores::smt_metadata::tests::accessors_work ... ok
+test model::stores::smt_metadata::tests::decode_handcrafted_wire ... ok
+test model::stores::smt_metadata::tests::round_trip ... ok
+test model::stores::smt_metadata::tests::wire_size ... ok
+test model::stores::smt_metadata::tests::delete_clears_row ... ok
+test model::stores::relations::tests::test_db_relations_store ... ok
+test consensus::factory::tests::archival_node_flag_persists_after_reopen ... ok
+test model::stores::tips::tests::test_update_tips ... ok
+test model::stores::utxo_diffs::tests::delete_clears_both_legacy_and_versioned_rows ... ok
+test model::stores::utxo_diffs::tests::get_decodes_pre_toccata_row ... ok
+test model::stores::utxo_set::tests::test_utxo_key_conversion ... ok
+test model::stores::virtual_state::seq_commit_tests::decodes_empty_vec_as_zero_hash ... ok
+test model::stores::virtual_state::seq_commit_tests::decodes_one_element_vec ... ok
+test model::stores::virtual_state::seq_commit_tests::encodes_as_one_element_vec ... ok
+test model::stores::virtual_state::seq_commit_tests::legacy_digest_vectors_collapse_to_a_single_commit ... ok
+test model::stores::virtual_state::seq_commit_tests::placeholder_virtual_state_round_trips ... ok
+test model::stores::virtual_state::seq_commit_tests::rejects_multi_element_vec ... ok
+test model::stores::utxo_diffs::tests::insert_rejects_existing_legacy_row ... ok
+test model::stores::utxo_diffs::tests::post_toccata_round_trip_uses_versioned_layout ... ok
+test model::stores::virtual_state::tests::post_toccata_set_lands_at_versioned_key ... ok
+test model::stores::virtual_state::tests::legacy_virtual_state_decodes_via_shadow ... ok
+test pipeline::virtual_processor::bounds::tests::active_ranges_are_inclusive ... ok
+test pipeline::virtual_processor::bounds::tests::inclusive_prune_cutoff_preserves_active_window_boundary ... ok
+test pipeline::virtual_processor::bounds::tests::inclusive_prune_cutoff_saturates_below_threshold ... ok
+test pipeline::virtual_processor::bounds::tests::newly_expired_range_returns_none_when_lower_cutoff_does_not_advance ... ok
+test pipeline::virtual_processor::bounds::tests::newly_expired_range_returns_parent_to_current_minus_one ... ok
+test pipeline::virtual_processor::bounds::tests::selected_parent_read_bounds_use_parent_as_upper_and_current_as_lower ... ok
+test pipeline::body_processor::body_validation_in_context::tests::validate_body_in_context_test ... ok
+2026-11-17 21:17:17.733+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+test pipeline::body_processor::body_validation_in_isolation::tests::merkle_root_missing_parents_known_invalid_test ... ok
+2026-11-17 21:17:17.873+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+2026-11-17 21:17:17.879+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+test pipeline::body_processor::body_validation_in_isolation::tests::validate_body_in_isolation_test ... ok
+test pipeline::virtual_processor::tests::antichain_merge_test ... ok
+2026-11-17 21:17:19.120+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+2026-11-17 21:17:19.205+07:00 [INFO ] Block be668a01c5c7d2e1cb7f6ad2d1e0fbfd6706514aca33739a04c5d70174b6c398 is disqualified from virtual chain: block be668a01c5c7d2e1cb7f6ad2d1e0fbfd6706514aca33739a04c5d70174b6c398 UTXO commitment is invalid - block header indicates 0000000000000000000000000000000000000000000000000000000000000000, but calculated value is e11c4c10eac9b51185c20b2d94f2a67b5c3b42a2ef55eacaf3888041198e0652
+test pipeline::virtual_processor::tests::basic_utxo_disqualified_test ... ok
+2026-11-17 21:17:20.009+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+2026-11-17 21:17:20.041+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+test pipeline::virtual_processor::tests::block_template_uses_current_block_version ... ok
+2026-11-17 21:17:20.221+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+2026-11-17 21:17:20.222+07:00 [INFO ] Block e0b69dadee69874241496003add426144882a50811d4cd42ee58646a26d2cc0a is disqualified from virtual chain: block e0b69dadee69874241496003add426144882a50811d4cd42ee58646a26d2cc0a UTXO commitment is invalid - block header indicates 0000000000000000000000000000000000000000000000000000000000000000, but calculated value is e11c4c10eac9b51185c20b2d94f2a67b5c3b42a2ef55eacaf3888041198e0652
+test pipeline::virtual_processor::tests::inactivity_shortcut_advances_one_block_per_chain_step ... ok
+2026-11-17 21:17:20.374+07:00 [INFO ] Block 8034fb6c551aa9680bb4bdd6dee61f37c97c17cca37ecd8078f457c2af777167 is disqualified from virtual chain: block 8034fb6c551aa9680bb4bdd6dee61f37c97c17cca37ecd8078f457c2af777167 UTXO commitment is invalid - block header indicates 0000000000000000000000000000000000000000000000000000000000000000, but calculated value is e11c4c10eac9b51185c20b2d94f2a67b5c3b42a2ef55eacaf3888041198e0652
+test pipeline::virtual_processor::tests::double_search_disqualified_test ... ok
+test pipeline::virtual_processor::utxo_validation::tests::test_rayon_reduce_retains_order ... ok
+test processes::coinbase::tests::calc_high_bps_total_rewards_delta ... ok
+test processes::coinbase::tests::expected_coinbase_transaction_uses_toccata_version ... ok
+test processes::coinbase::tests::modify_payload_test ... ok
+test processes::coinbase::tests::payload_serialization_test ... ok
+test processes::coinbase::tests::reserve_allocation_reduces_real_block_subsidy_without_changing_legacy_mode ... ok
+test processes::coinbase::tests::subsidy_by_month_table_test ... ok
+test processes::coinbase::tests::subsidy_test ... ok
+test processes::coinbase::tests::verify_crescendo_emission_schedule ... ignored, long
+test processes::difficulty::tests::test_base_level_work ... ok
+test processes::difficulty::tests::test_target_levels ... ok
+test processes::parents_builder::tests::test_calc_block_parents ... ok
+test processes::parents_builder::tests::test_multiple_pruned_parents ... ok
+test processes::pruning::tests::assert_pruning_depth_consistency ... ok
+test processes::reachability::inquirer::tests::test_add_early_blocks ... ok
+test processes::reachability::inquirer::tests::test_add_tree_blocks ... ok
+2026-11-17 21:17:21.040+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+test pipeline::virtual_processor::tests::inactivity_shortcut_block_clamps_to_genesis_within_finality_depth ... ok
+test processes::reachability::interval::tests::test_contains ... ok
+test processes::reachability::interval::tests::test_exponential_fractions ... ok
+test processes::reachability::interval::tests::test_interval_basics ... ok
+test processes::reachability::interval::tests::test_split_exact ... ok
+test processes::reachability::interval::tests::test_split_exponential ... ok
+test processes::reachability::reindex::tests::test_count_subtrees ... ok
+2026-11-17 21:17:22.349+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+test pipeline::virtual_processor::tests::inactivity_shortcut_resolves_to_chain_block_at_target_bs ... ok
+test processes::transaction_validator::tx_validation_in_isolation::tests::check_transaction_subnetwork_shape ... ok
+test processes::transaction_validator::tx_validation_in_isolation::tests::validate_tx_in_isolation_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_empty_incorrect_multi_signature_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_first_sig_incorrect_multi_signature_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_incorrect_signature_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_last_sig_incorrect_multi_signature_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_multi_signature_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_non_push_only_script_sig_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_scripts_parallel_budget_behavior ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_scripts_v0_sigop_count_input_fails_by_default_and_succeeds_with_5000_sigop_script_units ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::check_signature_test ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::test_sign ... ok
+test processes::transaction_validator::tx_validation_in_utxo_context::tests::validate_populated_transaction_sigop_budget_enforced_for_v0_and_v1 ... ok
+2026-11-17 21:17:22.696+07:00 [INFO ] Importing the UTXO set of the pruning point c7ad53d3f14276309a5e8c1b3af0149b90d98ee0ace751d9ffd6f2f0b3480887
+test pipeline::virtual_processor::tests::template_mining_sanity_test ... ok
+test processes::relations::tests::test_delete_level_relations_zero_cache ... ok
+test processes::reachability::inquirer::tests::test_dag_building_and_removal ... ok
+
+test result: ok. 79 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 58.32s

@@ -1,0 +1,76 @@
+{
+  "observed_at_utc": "2026-11-17T14:39:33.324685+00:00",
+  "tested_code_head": "7703767ac3f306afb469c3264ee2b8f5289ac4ab",
+  "mainnet_deployed": false,
+  "activation_gate": "BLOCKED",
+  "rust_suites": {
+    "core-retest": [
+      {
+        "passed": 78,
+        "failed": 0,
+        "ignored": 1
+      }
+    ],
+    "consensus-retest": [
+      {
+        "passed": 79,
+        "failed": 0,
+        "ignored": 1
+      }
+    ],
+    "bridge-retest": [
+      {
+        "passed": 150,
+        "failed": 0,
+        "ignored": 2
+      },
+      {
+        "passed": 121,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "rust_passed": 428,
+  "rust_ignored": 4,
+  "python_passed": 8,
+  "source_verification": {
+    "unchanged": true,
+    "changed": []
+  },
+  "stage_results": [
+    {
+      "stage": "core-retest",
+      "exit": 0
+    },
+    {
+      "stage": "consensus-retest",
+      "exit": 0
+    },
+    {
+      "stage": "bridge-retest",
+      "exit": 0
+    },
+    {
+      "stage": "faucet-e2e",
+      "exit": 0
+    },
+    {
+      "stage": "surplus-e2e",
+      "exit": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "target/debug/examples/mining_reserve_probe",
+      "sha256": "c9d423c868b2c6198899e3fca555d915c3fd6d66bc22d622d136c06b51a1083c",
+      "bytes": 886847808
+    },
+    {
+      "name": "target/debug/examples/reservoir_transfer_probe",
+      "sha256": "b9719f9f35c10f45bf6c2a7c7bb43c2ed44cbc2cacc3586b1e66bdba433e244a",
+      "bytes": 885864720
+    }
+  ],
+  "aggregate_reported_pass_count": 436
+}

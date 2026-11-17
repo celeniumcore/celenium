@@ -7,6 +7,13 @@ tabel Rust dan mencetak laporan; skrip tidak mengubah konsensus, membuat UTXO,
 mengirim transaksi, melakukan deploy, atau mengaktifkan perubahan mainnet.
 Angka di bawah adalah hasil model emisi, bukan bukti dana live atau saldo wallet.
 
+Status audit: **belum layak mainnet**. Konservasi tepat yang dibuktikan kalkulator
+berlaku untuk satu reward pada setiap indeks DAA berurutan. DAG dapat memiliki
+beberapa blok dengan DAA sama dan melewati indeks saat mergeset digabung; maka
+hasil tersebut belum membuktikan total emisi DAG. Baca
+[mining-reserve-verification/audit.md](mining-reserve-verification/audit.md) untuk
+counterexample, hasil node simnet, dan gate aktivasi yang belum terpenuhi.
+
 ## Pembagian suplai
 
 Cadangan mining awal berasal dari jatah mining nominal 52.500.000 CEN.

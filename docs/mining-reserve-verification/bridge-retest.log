@@ -1,0 +1,331 @@
+   Compiling celenium-consensus-core v2.1.0 (/home/dx401/celenium-build/consensus/core)
+   Compiling celenium-build-info v2.1.0 (/home/dx401/celenium-build/build-info)
+   Compiling celenium-txscript v2.1.0 (/home/dx401/celenium-build/crypto/txscript)
+   Compiling celenium-mining-errors v2.1.0 (/home/dx401/celenium-build/mining/errors)
+   Compiling celenium-addressmanager v2.1.0 (/home/dx401/celenium-build/components/addressmanager)
+   Compiling celenium-p2p-lib v2.1.0 (/home/dx401/celenium-build/protocol/p2p)
+   Compiling celenium-notify v2.1.0 (/home/dx401/celenium-build/notify)
+   Compiling celenium-consensus-client v2.1.0 (/home/dx401/celenium-build/consensus/client)
+   Compiling celenium-consensus-notify v2.1.0 (/home/dx401/celenium-build/consensus/notify)
+   Compiling celenium-consensusmanager v2.1.0 (/home/dx401/celenium-build/components/consensusmanager)
+   Compiling celenium-index-core v2.1.0 (/home/dx401/celenium-build/indexes/core)
+   Compiling celenium-consensus-wasm v2.1.0 (/home/dx401/celenium-build/consensus/wasm)
+   Compiling celenium-rpc-core v2.1.0 (/home/dx401/celenium-build/rpc/core)
+   Compiling celenium-utxoindex v2.1.0 (/home/dx401/celenium-build/indexes/utxoindex)
+   Compiling celenium-mining v2.1.0 (/home/dx401/celenium-build/mining)
+   Compiling celenium-p2p-mining v2.1.0 (/home/dx401/celenium-build/protocol/mining)
+   Compiling celenium-connectionmanager v2.1.0 (/home/dx401/celenium-build/components/connectionmanager)
+   Compiling celenium-grpc-core v2.1.0 (/home/dx401/celenium-build/rpc/grpc/core)
+   Compiling celenium-p2p-flows v2.1.0 (/home/dx401/celenium-build/protocol/flows)
+   Compiling celenium-rpc-service v2.1.0 (/home/dx401/celenium-build/rpc/service)
+   Compiling celenium-grpc-client v2.1.0 (/home/dx401/celenium-build/rpc/grpc/client)
+   Compiling celenium-pow v2.1.0 (/home/dx401/celenium-build/consensus/pow)
+   Compiling celenium-smt-store v2.1.0 (/home/dx401/celenium-build/consensus/smt-store)
+   Compiling celenium-consensus v2.1.0 (/home/dx401/celenium-build/consensus)
+   Compiling celenium-grpc-server v2.1.0 (/home/dx401/celenium-build/rpc/grpc/server)
+   Compiling celenium-index-processor v2.1.0 (/home/dx401/celenium-build/indexes/processor)
+   Compiling celenium-wrpc-server v2.1.0 (/home/dx401/celenium-build/rpc/wrpc/server)
+   Compiling celeniumd v2.1.0 (/home/dx401/celenium-build/celeniumd)
+   Compiling celenium-stratum-bridge v2.1.0 (/home/dx401/celenium-build/bridge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10m 49s
+     Running unittests src/lib.rs (target/debug/deps/celenium_stratum_bridge-fc43de60c7006646)
+
+running 152 tests
+test celeniumapi::funding_rpc_tests::funding_counts_only_unencumbered_source_script_outputs ... ok
+test celeniumapi::funding_rpc_tests::coinbase_funding_becomes_mature_at_the_parameter_boundary ... ok
+test celeniumapi::funding_rpc_tests::funding_excludes_coinbase_maturity_overflow ... ok
+test celeniumapi::funding_rpc_tests::funding_month_rejects_unknown_emission_timing ... ok
+test celeniumapi::funding_rpc_tests::funding_month_tracks_virtual_daa_at_consensus_month_boundaries ... ok
+test celeniumapi::funding_rpc_tests::funding_rejects_amount_sum_overflow ... ok
+test celeniumapi::funding_rpc_tests::funding_rejects_nodes_without_consensus_utxo_attestation ... ok
+test app_config::reserve_tests::reserve_is_opt_in_and_roundtrips_in_yaml ... ok
+test celeniumapi::funding_rpc_tests::journaled_transfer_rejects_changed_signature_with_the_same_transaction_id ... ok
+test celeniumapi::funding_rpc_tests::journaled_transfer_rejects_a_transaction_id_mismatch ... ok
+test celeniumapi::funding_rpc_tests::mempool_spends_reserve_each_exact_input_outpoint ... ok
+test celeniumapi::funding_rpc_tests::mempool_spent_outputs_are_removed_before_funding_is_summed ... ok
+test celeniumapi::funding_rpc_tests::reconciliation_page_advances_anchor_after_checking_all_acceptance_data ... ok
+test celeniumapi::funding_rpc_tests::journaled_transfer_rejects_modified_transaction_contents ... ok
+test celeniumapi::funding_rpc_tests::journaled_transfer_rejects_missing_or_forged_input_entries ... ok
+test celeniumapi::funding_rpc_tests::reconciliation_page_finds_a_transaction_even_when_acceptance_data_is_duplicated ... ok
+test celeniumapi::funding_rpc_tests::reconciliation_page_does_not_advance_on_removals_or_duplicate_anchor ... ok
+test emission_policy::tests::cut_never_exceeds_max_even_when_desperate ... ok
+test emission_policy::tests::cut_rises_when_balance_is_drained ... ok
+test emission_policy::tests::cut_stays_off_once_target_reached ... ok
+test emission_policy::tests::daily_cap_covers_one_full_max_claim ... ok
+test emission_policy::tests::daily_cap_positive_while_emission_runs ... ok
+test celeniumapi::funding_rpc_tests::reconciliation_progress_can_resume_on_a_later_page_with_removals ... ok
+test emission_policy::tests::drain_after_fill_turns_cut_back_on ... ok
+test emission_policy::tests::deadband_absorbs_near_full_balance ... ok
+test emission_policy::tests::emission_to_sums_months_correctly ... ok
+test emission_policy::tests::empty_reservoir_cuts_at_savings_rate ... ok
+test celeniumapi::funding_rpc_tests::reconciliation_rejects_a_node_from_another_network ... ok
+test emission_policy::tests::floor_declines_from_month_one ... ok
+test emission_policy::tests::floor_intermediate_product_requires_u128 ... ok
+test emission_policy::tests::floor_is_zero_after_emission_ends ... ok
+test celeniumapi::funding_rpc_tests::journaled_transfer_rejects_mismatched_payment_metadata ... ok
+test emission_policy::tests::floor_starts_at_initial_target ... ok
+test emission_policy::tests::floor_never_exceeds_target ... ok
+test emission_policy::tests::full_reservoir_stops_cutting ... ok
+test emission_policy::tests::month_zero_is_genesis ... ok
+test emission_policy::tests::floor_tracks_remaining_emission_rounded_down ... ok
+test emission_policy::tests::snapshot_reports_consistent_policy ... ok
+test emission_policy::tests::table_length_is_817 ... ok
+test emission_policy::tests::zero_cut_when_emission_ended ... ok
+test faucet::tests::cash_budget_cannot_increase_with_each_claim_or_restart ... ok
+test faucet::tests::claims_cannot_cross_the_reservoir_network ... ok
+test faucet::tests::confirmed_withdrawal_is_debited_once_after_journal_replay ... ok
+test faucet::tests::corrupt_ledger_is_not_loaded_as_an_empty_balance ... ok
+test faucet::tests::daily_cap_stops_issuance ... ok
+test emission_policy::tests::floor_never_exceeds_remaining_emission ... ok
+test faucet::tests::debit_deducts_balance ... ok
+test faucet::tests::declining_reserve_target_preserves_legacy_claims_without_new_credit ... ok
+test faucet::tests::device_cap_limits_accounts ... ok
+test emission_policy::tests::floor_declines_each_month_while_emission_remains ... ok
+test faucet::tests::exhausted_budget_rejects_further_claims ... ok
+test faucet::tests::existing_claimed_balance_survives_day_rollover ... ok
+test faucet::tests::failed_claim_does_not_register_a_device ... ok
+test emission_policy::tests::simulation_reaches_dynamic_target_without_spending ... ok
+test faucet::tests::fixed_claim_is_available_at_midnight_without_waiting ... ok
+test faucet::tests::fixed_claim_is_once_per_day_and_returns_next_day ... ok
+test faucet::tests::fixed_daily_claim_pays_1000_at_any_time_of_day ... ok
+test faucet::tests::fixed_daily_claim_rejects_short_budget_without_partial_credit ... ok
+test faucet::tests::fixed_daily_claim_tops_up_existing_partial_drip_once ... ok
+test faucet::tests::fixed_daily_reward_does_not_shrink_with_participant_count ... ok
+test faucet::tests::fixed_reward_uses_budget_as_a_cap_not_a_divisor ... ok
+test faucet::tests::fully_backed_claims_stop_at_five_hundred_thousand_cen ... ok
+test faucet::tests::legacy_daily_claim_is_not_paid_again ... ok
+test faucet::tests::lowering_floor_never_erases_existing_faucet_claims ... ok
+test faucet::tests::minimum_withdraw_is_reachable_from_one_daily_claim ... ok
+test faucet::tests::outstanding_cap_stops_issuance ... ok
+test faucet::tests::outstanding_claims_are_capped_at_the_faucet_reserve_limit ... ok
+test faucet::tests::padded_address_is_rejected_instead_of_creating_another_account ... ok
+test faucet::tests::preview_matches_claim_at_day_rollover_with_changing_demand ... ok
+test faucet::tests::preview_stops_when_daily_budget_is_exhausted ... ok
+test faucet::tests::preview_stops_when_liability_cap_is_full ... ok
+test faucet::tests::previous_drip_remainder_is_preserved_with_new_daily_claim ... ok
+test faucet::tests::real_backing_survives_emission_end_without_erasing_old_claims ... ok
+test faucet::tests::rejects_empty_address ... ok
+test faucet::tests::rejects_invalid_address ... ok
+test faucet::tests::reported_reward_matches_actual_payout ... ok
+test faucet::tests::reserve_cash_can_fund_claims_with_an_empty_operational_wallet ... ok
+test faucet::tests::daily_payout_never_exceeds_cap_under_stress ... ok
+test faucet::tests::save_load_roundtrip ... ok
+test faucet::tests::save_can_be_reloaded_after_claim_without_double_credit ... ok
+test faucet::tests::stale_backing_cannot_issue_credit ... ok
+test faucet::tests::total_outstanding_tracks_ledger ... ok
+test faucet::tests::unfunded_reservoir_cannot_issue_new_claims ... ok
+test faucet::tests::withdraw_cooldown_blocks_repeat ... ok
+test faucet::tests::withdraw_fee_check_rejects_when_actual_fee_exceeds_remaining_budget ... ok
+test faucet::tests::withdrawal_does_not_make_the_daily_reward_claimable_again ... ok
+test faucet::tests::zero_credit_drip_enrollment_can_claim_full_daily_reward ... ok
+test faucet_funding::tests::reserve_cannot_alias_operational_address_or_use_another_network ... ok
+test faucet_signer::tests::debug_never_prints_secret ... ok
+test faucet_signer::tests::derives_stable_mainnet_address ... ok
+test faucet_signer::tests::network_aware_signer_retains_mainnet_default_and_redacts_secret ... ok
+test faucet_signer::tests::rejects_malformed_secret ... ok
+test hasher::tests::test_calculate_target ... ignored
+test hasher::tests::test_diff_to_target ... ignored
+test hasher::tests::test_share_validation_comparison ... ok
+test pplns::tests::dust_is_assigned_to_largest_worker ... ok
+test pplns::tests::empty_tracker_distributes_nothing ... ok
+test pplns::tests::equal_weight_splits_evenly ... ok
+test pplns::tests::single_worker_gets_entire_reward ... ok
+test pplns::tests::weighted_shares_are_proportional ... ok
+test pplns::tests::window_evicts_oldest_shares ... ok
+test faucet_signer::tests::ensure_matches_rejects_other_address ... ok
+test prom::tests::faucet_balance_http_exposes_fixed_daily_contract ... ok
+test prom::tests::faucet_claim_save_failure_keeps_memory_unchanged ... ok
+test faucet::tests::directory_sync_failure_retains_credit_and_blocks_mutations ... ok
+test reservoir::tests::cut_never_exceeds_policy_ceiling ... ok
+test reservoir::tests::disabled_config_never_cuts ... ok
+test reservoir::tests::drained_reservoir_turns_cut_back_on ... ok
+test reservoir::tests::empty_reservoir_turns_cut_on ... ok
+test reservoir::tests::full_reservoir_returns_rewards_to_miners ... ok
+test reservoir::tests::target_shrinks_only_at_emission_tail ... ok
+test reservoir_funds::tests::claims_cannot_spend_outstanding_liabilities ... ok
+test reservoir_funds::tests::claims_retain_the_operational_buffer ... ok
+test reservoir_funds::tests::disabled_reserve_preserves_operational_funding ... ok
+test reservoir_funds::tests::empty_operational_wallet_can_use_a_funded_reserve ... ok
+test reservoir_funds::tests::end_emission_reserve_funds_a_fixed_claim_on_each_of_365_days ... ok
+test reservoir_funds::tests::end_emission_sweep_retains_a_year_of_minimum_claims ... ok
+test reservoir_funds::tests::end_emission_uses_funded_backup_for_a_year_of_minimum_claims ... ok
+test reservoir_funds::tests::fallback_selector_requires_one_source_and_combined_solvency ... ok
+test reservoir_funds::tests::missing_or_stale_either_source_fails_closed ... ok
+test reservoir_funds::tests::protected_surplus_counts_reserve_inside_the_total_floor ... ok
+test reservoir_funds::tests::protection_adds_service_reserve_beyond_liabilities_and_buffer ... ok
+test reservoir_funds::tests::protection_keeps_the_greater_of_floor_or_liability_backing ... ok
+test reservoir_funds::tests::reduced_target_preserves_only_actual_legacy_backing ... ok
+test reservoir_funds::tests::reserve_target_never_creates_cash ... ok
+test reservoir_funds::tests::reserves_fund_claims_after_emission_ends ... ok
+test reservoir_funds::tests::scheduled_quota_is_limited_by_backing ... ok
+test reservoir_funds::tests::service_reserve_covers_a_year_of_at_least_one_daily_claim ... ok
+test reservoir_funds::tests::service_reserve_sweep_never_invents_spendable_cash ... ok
+test reservoir_funds::tests::snapshots_expire_after_thirty_seconds_without_accepting_clock_regressions ... ok
+test reservoir_funds::tests::sweep_spends_only_surplus_after_protection_and_fee ... ok
+test prom::tests::test_http_routing_and_config_write ... ok
+test transfer::tests::adds_inputs_until_storage_mass_fits ... ok
+test transfer::tests::exact_fee_rejects_underpayment_instead_of_changing_it ... ok
+test share_handler::retention_tests::set_client_vardiff_does_not_recreate_pruned_stats ... ok
+test transfer::tests::exact_input_value_omits_zero_change_and_keeps_requested_fee ... ok
+test transfer::tests::maturity_comes_from_network_parameters ... ok
+test transfer::tests::opt_in_simnet_quote_preserves_small_amounts_and_charges_real_fee ... ok
+test transfer::tests::quote_uses_signed_mass_and_ceil_fee ... ok
+test transfer::tests::surplus_prefers_large_change_and_respects_network_input_limit ... ok
+test transfer::tests::surplus_reduces_batches_that_exceed_compute_mass ... ok
+test transfer::tests::surplus_rejects_unspendable_inputs_and_invalid_limits_without_panicking ... ok
+test prom::tests::faucet_claim_response_persists_fixed_daily_amount ... ok
+test transfer::tests::validates_network_and_source_key_before_selection ... ok
+test transfer::tests::zero_amount_is_rejected_before_mass_calculation ... ok
+test treasury::tests::bootstrap_stops_when_operational_and_reserve_meet_the_shared_floor ... ok
+test treasury::tests::only_operator_bootstrap_worker_funds_reservoir ... ok
+test transfer::tests::surplus_batches_bootstrap_inputs_and_can_sweep_again ... ok
+test treasury::tests::reserve_withdrawal_replay_keeps_signed_transaction_and_source ... ok
+test treasury::tests::pending_transfer_survives_restart_without_becoming_spendable ... ok
+test transfer::tests::tiny_legacy_transfer_returns_explicit_error ... ok
+test faucet::tests::fee_budget_exhausts_after_cap ... ok
+
+test result: ok. 150 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 13.64s
+
+     Running unittests src/main.rs (target/debug/deps/stratum_bridge-b610cf2f736800ab)
+
+running 121 tests
+test tests::comprehensive_tests::test_celenium_diff_structure ... ok
+test tests::comprehensive_tests::test_difficulty_for_different_miners ... ok
+test tests::comprehensive_tests::test_difficulty_to_target_calculation ... ok
+test tests::comprehensive_tests::test_error_short_codes ... ok
+test tests::comprehensive_tests::test_example_miner_connection_flow ... ok
+test tests::comprehensive_tests::test_extranonce_assignment_sequence ... ok
+test tests::comprehensive_tests::test_extranonce_prepending_in_nonce ... ok
+test tests::comprehensive_tests::test_full_stratum_flow_mock ... ok
+test tests::comprehensive_tests::test_job_circular_buffer_wraparound ... ok
+test tests::comprehensive_tests::test_job_id_workaround_logic ... ok
+test tests::comprehensive_tests::test_job_storage_and_retrieval ... ok
+test tests::comprehensive_tests::test_default_worker_name_when_miner_omits_dot_worker ... ok
+test tests::comprehensive_tests::test_miner_type_detection_bitmain ... ok
+test tests::comprehensive_tests::test_miner_type_detection_bzminer ... ok
+test tests::comprehensive_tests::test_mining_state_difficulty_storage ... ok
+test tests::comprehensive_tests::test_mining_state_header_tracking ... ok
+test tests::comprehensive_tests::test_mining_state_initialization ... ok
+test tests::comprehensive_tests::test_mining_state_job_id_sequence ... ok
+test tests::comprehensive_tests::test_mining_state_job_retrieval_nonexistent ... ok
+test tests::comprehensive_tests::test_share_handler_creation ... ok
+test tests::comprehensive_tests::test_client_handler_extranonce_wrapping_edge ... ok
+test tests::comprehensive_tests::test_client_handler_big_job_format_detection ... ok
+test tests::comprehensive_tests::test_share_submit_asic_format_validation ... ok
+test tests::comprehensive_tests::test_share_submit_ethereumstratum_format_validation ... ok
+test tests::comprehensive_tests::test_share_submit_invalid_param_count_validation ... ok
+test tests::comprehensive_tests::test_miner_type_detection_iceriver ... ok
+test tests::comprehensive_tests::test_share_handler_vardiff_management ... ok
+test tests::comprehensive_tests::test_share_handler_worker_stats ... ok
+test tests::comprehensive_tests::test_stratum_context_connected_flag ... ok
+test tests::comprehensive_tests::test_stratum_context_id_management ... ok
+test tests::comprehensive_tests::test_stratum_context_summary ... ok
+test tests::comprehensive_tests::test_stratum_protocol_subscribe_bitmain_no_extranonce ... ok
+test tests::comprehensive_tests::test_unmarshal_event_missing_required_fields ... ok
+test tests::comprehensive_tests::test_unmarshal_event_type_mismatches ... ok
+test tests::comprehensive_tests::test_stratum_protocol_subscribe_flow ... ok
+test tests::comprehensive_tests::test_stratum_protocol_subscribe_with_client_handler ... ok
+test tests::comprehensive_tests::test_subscribe_rejects_oversized_extranonce ... ok
+test tests::comprehensive_tests::test_vardiff_boundary_conditions ... ok
+test tests::comprehensive_tests::test_vardiff_concept_documentation ... ok
+test tests::comprehensive_tests::test_vardiff_no_change_scenarios ... ok
+test tests::comprehensive_tests::test_wallet_address_cleaning_whitespace_handling ... ok
+test tests::comprehensive_tests::test_wallet_address_cleaning_without_prefix ... ok
+test tests::comprehensive_tests::test_wallet_address_cleaning_invalid_addresses ... ok
+test tests::test_append_line_data_accepts_data_under_limit ... ok
+test tests::test_append_line_data_accepts_exactly_at_limit ... ok
+test tests::test_append_line_data_accepts_incremental_chunks_under_limit ... ok
+test tests::test_append_line_data_rejects_single_oversized_chunk ... ok
+test tests::test_append_line_data_rejects_when_limit_exceeded ... ok
+test tests::test_bind_addr_from_port_empty ... ok
+test tests::test_bind_addr_from_port_with_colon ... ok
+test tests::test_bind_addr_from_port_with_full_address ... ok
+test tests::test_bind_addr_from_port_without_colon ... ok
+test tests::test_config_coinbase_tag_suffix_empty_string ... ok
+test tests::test_config_coinbase_tag_suffix_with_value ... ok
+test tests::test_config_duplicate_ports_error ... ok
+test tests::test_config_empty_instances_list ... ok
+test tests::test_config_empty_web_dashboard_port_kept_empty ... ok
+test tests::test_config_invalid_yaml ... ok
+test tests::test_config_malformed_yaml ... ok
+test tests::test_config_missing_instance_fields_error ... ok
+test tests::test_config_multi_instance_mode ... ok
+test tests::test_config_negative_values ... ok
+test tests::test_config_port_normalization ... ok
+test tests::test_config_single_instance_defaults_when_missing_fields ... ok
+test tests::test_config_single_instance_log_to_file_uses_global ... ok
+test tests::test_config_single_instance_missing_fields_use_defaults ... ok
+test tests::test_config_single_instance_mode ... ok
+test tests::test_config_var_diff_parsing ... ok
+test tests::test_config_very_large_values ... ok
+test tests::comprehensive_tests::test_worker_prom_session_syncs_start_time_for_current_wallet ... ok
+test tests::test_error_short_code_display ... ok
+test tests::test_config_whitespace_in_values ... ok
+test tests::test_error_short_code_to_string ... ok
+test tests::test_jsonrpc_event_method_enum ... ok
+test tests::test_jsonrpc_event_new ... ok
+test tests::test_jsonrpc_event_serialize ... ok
+test tests::test_jsonrpc_response_error ... ok
+test tests::test_jsonrpc_response_new ... ok
+test tests::test_jsonrpc_response_serialize ... ok
+test tests::test_jsonrpc_response_success ... ok
+test tests::test_mining_state_big_job_flag ... ok
+test tests::test_mining_state_difficulty_management ... ok
+test tests::test_mining_state_initial_values ... ok
+test tests::test_mining_state_initialization_flag ... ok
+test tests::test_mining_state_job_management ... ok
+test tests::test_normalize_port_empty ... ok
+test tests::test_normalize_port_with_colon ... ok
+test tests::test_normalize_port_with_full_address ... ok
+test tests::test_normalize_port_with_whitespace ... ok
+test tests::test_normalize_port_without_colon ... ok
+test tests::test_parse_bool_false_values ... ok
+test tests::test_parse_bool_in_instance_spec ... ok
+test tests::test_parse_bool_invalid_values ... ok
+test tests::test_parse_bool_true_values ... ok
+test tests::test_parse_instance_spec_empty_prom_port_is_none ... ok
+test tests::test_parse_instance_spec_invalid_diff ... ok
+test tests::test_parse_instance_spec_invalid_wait ... ok
+test tests::test_parse_instance_spec_multiple_ports ... ok
+test tests::test_parse_instance_spec_rejects_empty_port ... ok
+test tests::test_parse_instance_spec_unknown_key ... ok
+test tests::test_parse_instance_spec_with_whitespace ... ok
+test tests::test_parse_instance_spec_with_all_fields ... ok
+test tests::test_stratum_method_from_str ... ok
+test tests::test_stratum_method_to_string ... ok
+test tests::test_total_row_spm_uses_worker_average ... ok
+test tests::test_unmarshal_event_basic ... ok
+test tests::test_unmarshal_event_invalid_json ... ok
+test tests::test_unmarshal_event_preserves_newlines ... ok
+test tests::test_unmarshal_event_sanitizes_control_chars ... ok
+test tests::test_unmarshal_event_with_empty_params ... ok
+test tests::test_unmarshal_event_with_nested_objects ... ok
+test tests::test_unmarshal_event_with_null_id ... ok
+test tests::test_unmarshal_event_with_string_id ... ok
+test tests::test_unmarshal_event_with_unicode ... ok
+test tests::test_unmarshal_event_without_id ... ok
+test tests::test_unmarshal_event_with_very_long_string ... ok
+test tests::test_unmarshal_response_error ... ok
+test tests::test_unmarshal_response_invalid_json ... ok
+test tests::test_unmarshal_response_success ... ok
+test tests::comprehensive_tests::test_wallet_address_cleaning_with_prefix ... ok
+2026-11-17 21:29:16.215+07:00 [INFO ] celeniumd v2.1.0-d987fa4
+2026-11-17 21:29:16.216+07:00 [INFO ] Application directory: /home/dx401/.hermes/profiles/devops/cache/scratch/celeniumd_test_cd765d72-a79a-4d69-9c9e-7f96a62e8ccd
+2026-11-17 21:29:16.216+07:00 [INFO ] Data directory: /home/dx401/.hermes/profiles/devops/cache/scratch/celeniumd_test_cd765d72-a79a-4d69-9c9e-7f96a62e8ccd/celenium-devnet/datadir
+2026-11-17 21:29:16.216+07:00 [INFO ] Logs directory: /home/dx401/.hermes/profiles/devops/cache/scratch/celeniumd_test_cd765d72-a79a-4d69-9c9e-7f96a62e8ccd/celenium-devnet/logs
+2026-11-17 21:29:16.218+07:00 [INFO ] Utxoindex Data directory /home/dx401/.hermes/profiles/devops/cache/scratch/celeniumd_test_cd765d72-a79a-4d69-9c9e-7f96a62e8ccd/celenium-devnet/datadir/utxoindex
+2026-11-17 21:29:18.320+07:00 [INFO ] Importing the UTXO set of the pruning point b77f7c31cb9701fa3b3d7f62e945fbad26e0a9b914b81ff240d1fb0560c9006f
+2026-11-17 21:29:21.305+07:00 [INFO ] Resyncing the utxoindex...
+2026-11-17 21:29:21.338+07:00 [INFO ] GRPC Server starting on: 127.0.0.1:19273
+2026-11-17 21:29:21.339+07:00 [INFO ] P2P Server starting on: 127.0.0.1:57435
+2026-11-17 21:29:21.832+07:00 [INFO ] Connecting to Celenium node at 127.0.0.1:19273
+2026-11-17 21:29:21.849+07:00 [INFO ] GRPC, new incoming connection 22260fee-63ba-4ff1-bf18-cdc6135e8363@127.0.0.1:45346 #1
+2026-11-17 21:29:21.914+07:00 [WARN ] Using polling-based block template listener (concrete CeleniumApi not provided, notifications not available)
+2026-11-17 21:29:21.914+07:00 [INFO ] test-instance Starting stratum listener on :0
+2026-11-17 21:29:21.976+07:00 [WARN ] failed to get network hashrate from celenium, prom stats will be out of date: difficulty error: window data has only 0 entries -- this usually happens when the node has just began syncing
+2026-11-17 21:29:22.119+07:00 [INFO ] GRPC, end connection 22260fee-63ba-4ff1-bf18-cdc6135e8363@127.0.0.1:45346 #1
+2026-11-17 21:29:22.119+07:00 [INFO ] P2P Server stopped: 127.0.0.1:57435
+2026-11-17 21:29:22.131+07:00 [INFO ] GRPC Server stopped on: 127.0.0.1:19273
+test tests::integration::test_bridge_startup_with_inprocess_node ... ok
+
+test result: ok. 121 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.81s

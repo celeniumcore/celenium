@@ -1,0 +1,9 @@
+   Compiling celenium-stratum-bridge v2.1.0 (/home/dx401/celenium-build/bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 21s
+     Running `target/debug/examples/reservoir_transfer_probe`
+NETWORK simnet default_params=true skip_pow=true maturity=0
+2026-11-17 21:34:16.607+07:00 [WARN ] failed to get network hashrate from celenium, prom stats will be out of date: difficulty error: window data has only 0 entries -- this usually happens when the node has just began syncing
+UNFUNDED new_claim_rejected=true
+SURPLUS_CONFIRMED txid=91cd882ca153f905b0818e4a206092f8783d862bbd98434927805785fc2b6a60 amount=266146010 fee=36006 received=266146010 protected=250366000 source_mature=5377744548 outstanding=1000 duplicate_payment=false
+JOURNAL_RESTART pending_preserved=true mempool_spends_excluded=true default_consensus=true history_pages=2 requested=5361331353 second_batch=266182525
+RESERVOIR_SIMNET_PROOF_FINISHED

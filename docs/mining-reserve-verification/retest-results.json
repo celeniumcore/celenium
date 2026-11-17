@@ -1,0 +1,22 @@
+[
+  {
+    "stage": "core-retest",
+    "exit": 0
+  },
+  {
+    "stage": "consensus-retest",
+    "exit": 0
+  },
+  {
+    "stage": "bridge-retest",
+    "exit": 0
+  },
+  {
+    "stage": "faucet-e2e",
+    "exit": 0
+  },
+  {
+    "stage": "surplus-e2e",
+    "exit": 0
+  }
+]

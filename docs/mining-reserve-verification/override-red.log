@@ -1,0 +1,18 @@
+   Compiling celenium-consensus-core v2.1.0 (/home/dx401/celenium-build/consensus/core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 37.51s
+     Running unittests src/lib.rs (target/debug/deps/celenium_consensus_core-9da5b2abd896f603)
+
+running 1 test
+test config::params::tests::reserve_overrides_cannot_bypass_schedule_checks_on_a_second_call - should panic ... FAILED
+
+failures:
+
+---- config::params::tests::reserve_overrides_cannot_bypass_schedule_checks_on_a_second_call stdout ----
+note: test did not panic as expected at consensus/core/src/config/params.rs:846:8
+
+failures:
+    config::params::tests::reserve_overrides_cannot_bypass_schedule_checks_on_a_second_call
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p celenium-consensus-core --lib`

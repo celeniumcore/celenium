@@ -1,0 +1,10 @@
+   Compiling celenium-stratum-bridge v2.1.0 (/home/dx401/celenium-build/bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 59s
+     Running `target/debug/examples/mining_reserve_probe`
+2026-11-17 21:32:33.726+07:00 [WARN ] failed to get network hashrate from celenium, prom stats will be out of date: difficulty error: window data has only 0 entries -- this usually happens when the node has just began syncing
+RESERVE_FUNDED genesis=633eb029b6f95f8e954abbb8c1f8f64c5eaa1159702b665718114c8c88c0c92c operational=0 reserve=50000000000000 floor=200000000000000 initial_supply=1900000000000000 mined_blocks=0 default_storage_rules=true
+SMALL_PAYOUT_BLOCKED amount=1000 ledger_preserved=true reason=SmallTransferNotSupported: no selection within 128 inputs satisfies storage mass limit 500000 for amount 1000
+RESERVE_PAYMENT_SUBMITTED txid=b6b510815d8ce00b64b6355fd559b3de52cf797d262c9d2a90be3c12595d4442 amount=100000000 fee=509 operational=0 source=reserve journal_reloaded=true
+RESERVE_FAUCET_REPLAY same_tx=true duplicate_payment=false recipient_spent=true ledger_restart=true remaining_claims=1000 fee_debited_once=true no_worker_connected=true
+RESERVE_PAYMENT_CONFIRMED txid=b6b510815d8ce00b64b6355fd559b3de52cf797d262c9d2a90be3c12595d4442 recipient=100000000 reserve_remaining=49999899999491 floor_unchanged=true reduced_subsidy=1980517 daa=24
+MINING_RESERVE_SIMNET_PROOF_FINISHED
