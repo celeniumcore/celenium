@@ -21,6 +21,7 @@ pub mod share_handler;
 pub mod stratum_context;
 pub mod stratum_listener;
 pub mod stratum_server;
+pub mod transfer;
 
 pub use app_config::{BridgeConfig, InstanceConfig};
 pub use celeniumapi::*;

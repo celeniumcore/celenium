@@ -803,13 +803,6 @@ impl CeleniumApi {
         Ok(balances)
     }
 
-    /// Build, sign, and submit a transfer of `amount_pradha` from `from_address`
-    /// to `to_address`, signing with the caller-supplied 32-byte secret. This
-    /// mirrors the proven end-to-end path in
-    /// `rpc/grpc/examples/simple_client/examples/tx_e2e.rs` (P2PK script -> UTXO
-    /// selection -> sign_with_multiple_v2 -> mempool). The secret is supplied per
-    /// request because the wallet signer lives outside the bridge, exactly like
-    /// the wallet CLI's `--privkey-file` flow; it is never logged or persisted.
     pub async fn send_coins(
         &self,
         from_address: &str,
@@ -818,127 +811,105 @@ impl CeleniumApi {
         fee_pradha: u64,
         private_key_hex: &str,
     ) -> Result<String> {
-        use celenium_consensus_core::constants::{MAX_TX_IN_SEQUENCE_NUM, TX_VERSION};
-        use celenium_consensus_core::sign;
-        use celenium_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
-        use celenium_consensus_core::tx::{
-            SignableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry,
-        };
-        use celenium_txscript::standard::pay_to_address_script;
+        let prepared =
+            self.prepare_transfer_inner(from_address, to_address, amount_pradha, Some(fee_pradha), private_key_hex, None).await?;
+        self.submit_prepared_transfer(prepared).await
+    }
 
-        // Node consensus value: `coinbase_maturity = BPS * COINBASE_MATURITY_SECONDS`
-        // (100 s constant). Simnet is 10 BPS, so 10 * 100 = 1000 DAA. The previous
-        // 200 let the bridge spend 200..999-DAA-old coinbase and get rejected by
-        // the node as immature.
-        const COINBASE_MATURITY_DAA: u64 = 1000;
+    /// Signs an exact quote without broadcasting, so the faucet can check its fee budget first.
+    pub async fn prepare_transfer(
+        &self,
+        from_address: &str,
+        to_address: &str,
+        amount_pradha: u64,
+        private_key_hex: &str,
+    ) -> Result<crate::transfer::PreparedTransfer> {
+        self.prepare_transfer_inner(from_address, to_address, amount_pradha, None, private_key_hex, None).await
+    }
 
-        let secret = hex::decode(private_key_hex.trim().trim_start_matches("0x")).context("secret is not valid hex")?;
-        let secret: [u8; 32] = secret.try_into().map_err(|v: Vec<u8>| anyhow::anyhow!("secret must be 32 bytes, got {}", v.len()))?;
-
-        let source = Address::try_from(from_address).map_err(|e| anyhow::anyhow!("bad from-address: {e}"))?;
-        let dest = Address::try_from(to_address).map_err(|e| anyhow::anyhow!("bad to-address: {e}"))?;
-
-        // Change returns to the source's own script. `pay_to_address_script`
-        // handles every standard address version (PubKey / PubKeyECDSA / ScriptHash).
-        let source_script = pay_to_address_script(&source);
-        let dest_script = pay_to_address_script(&dest);
-
-        let dag = self
-            .client
-            .get_block_dag_info_call(None, celenium_rpc_core::GetBlockDagInfoRequest {})
+    /// Local simnet experiments must select the same policy as their isolated node.
+    pub async fn prepare_simnet_transfer(
+        &self,
+        from_address: &str,
+        to_address: &str,
+        amount_pradha: u64,
+        private_key_hex: &str,
+        storage_mass_amount_floor: u64,
+    ) -> Result<crate::transfer::PreparedTransfer> {
+        self.prepare_transfer_inner(from_address, to_address, amount_pradha, None, private_key_hex, Some(storage_mass_amount_floor))
             .await
-            .context("get_block_dag_info failed")?;
-        let daa = dag.virtual_daa_score;
+    }
 
+    async fn transfer_feerate(&self) -> Result<f64> {
+        let response = self.client.get_fee_estimate_call(None, GetFeeEstimateRequest {}).await.context("get_fee_estimate failed")?;
+        let rate = response.estimate.low_buckets.first().map(|bucket| bucket.feerate).unwrap_or(crate::transfer::FALLBACK_FEERATE);
+        anyhow::ensure!(rate.is_finite() && rate >= 0.0, "node returned an invalid fee rate");
+        Ok(rate.max(crate::transfer::FALLBACK_FEERATE))
+    }
+
+    async fn prepare_transfer_inner(
+        &self,
+        from_address: &str,
+        to_address: &str,
+        amount_pradha: u64,
+        fee_pradha: Option<u64>,
+        private_key_hex: &str,
+        simnet_floor: Option<u64>,
+    ) -> Result<crate::transfer::PreparedTransfer> {
+        let info = self.client.get_server_info_call(None, GetServerInfoRequest {}).await.context("get_server_info failed")?;
+        let mut params = crate::transfer::network_params(info.network_id)?;
+        if let Some(floor) = simnet_floor {
+            anyhow::ensure!(
+                params.net.network_type == celenium_consensus_core::network::NetworkType::Simnet,
+                "experimental transfer policy is restricted to simnet"
+            );
+            params.storage_mass_amount_floor = floor;
+        }
+        let source = Address::try_from(from_address).context("invalid source address")?;
+        let destination = Address::try_from(to_address).context("invalid destination address")?;
+        let secret = hex::decode(private_key_hex.trim().trim_start_matches("0x")).context("secret is not valid hex")?;
+        let secret: [u8; 32] = secret.try_into().map_err(|_| anyhow::anyhow!("secret must be 32 bytes"))?;
+        crate::transfer::validate_request(&params, &source, &destination, amount_pradha, &secret)?;
+        let feerate = self.transfer_feerate().await?;
         let utxos = self
             .client
             .get_utxos_by_addresses_call(None, celenium_rpc_core::GetUtxosByAddressesRequest::new(vec![source.clone()]))
             .await
             .context("get_utxos_by_addresses failed")?;
+        let inputs = utxos.entries.into_iter().map(|u| (u.outpoint.into(), u.utxo_entry.into())).collect();
+        let signed = crate::transfer::build_transfer(
+            &params,
+            info.virtual_daa_score,
+            &source,
+            &destination,
+            amount_pradha,
+            fee_pradha,
+            feerate,
+            &secret,
+            inputs,
+        )?;
+        crate::transfer::PreparedTransfer::new(signed, &params)
+    }
 
-        // Aggregate mature UTXOs until they cover amount + fee. Single-input
-        // selection is not enough here: the per-block subsidy (~1.37 M pradha)
-        // sits far below the KIP-0009 storage-mass break-even, so a one-input
-        // spend always exceeds the 500 k storage-mass limit. Multiple inputs
-        // drive the storage mass to zero because the consumed plurality
-        // outweighs the two created outputs.
-        let mut selected_inputs: Vec<(TransactionOutpoint, UtxoEntry)> = Vec::new();
-        let mut selected_total = 0u64;
-        for u in &utxos.entries {
-            if selected_total >= amount_pradha.saturating_add(fee_pradha) {
-                break;
-            }
-            let entry: UtxoEntry = u.utxo_entry.clone().into();
-            let mature = if entry.is_coinbase { entry.block_daa_score.saturating_add(COINBASE_MATURITY_DAA) <= daa } else { true };
-            if mature {
-                selected_total = selected_total.saturating_add(entry.amount);
-                selected_inputs.push((u.outpoint.into(), entry));
-            }
-        }
-
-        if selected_total < amount_pradha.saturating_add(fee_pradha) {
-            anyhow::bail!("no mature UTXOs with enough total value for this transfer");
-        }
-
-        let change = selected_total.saturating_sub(amount_pradha).saturating_sub(fee_pradha);
-
-        let mut inputs = Vec::with_capacity(selected_inputs.len());
-        let mut entries = Vec::with_capacity(selected_inputs.len());
-        for (outpoint, entry) in selected_inputs {
-            inputs.push(TransactionInput::new(outpoint, vec![], MAX_TX_IN_SEQUENCE_NUM, 1));
-            entries.push(entry);
-        }
-
-        let payment_output = TransactionOutput::new(amount_pradha, dest_script);
-        let change_output = TransactionOutput::new(change, source_script);
-        let tx = Transaction::new(TX_VERSION, inputs, vec![payment_output, change_output], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
-
-        let signable = SignableTransaction::with_entries(tx, entries);
-        let signed = match sign::sign_with_multiple_v2(signable, &[secret]) {
-            sign::Signed::Fully(t) => t,
-            sign::Signed::Partially(_) => return Err(anyhow::anyhow!("transaction is only partially signed")),
-        };
-        sign::verify(&signed.as_verifiable()).map_err(|e| anyhow::anyhow!("local signature verification failed: {e}"))?;
-
-        let tx = signed.tx;
-        let txid = tx.id().to_string();
-
-        let rpc_tx: celenium_rpc_core::RpcTransaction = (&tx).into();
+    pub async fn submit_prepared_transfer(&self, prepared: crate::transfer::PreparedTransfer) -> Result<String> {
+        let info = self.client.get_server_info_call(None, GetServerInfoRequest {}).await.context("get_server_info failed")?;
+        anyhow::ensure!(info.network_id == prepared.network_id, "node network changed after preparing transfer");
+        let expected = prepared.transaction_id().to_owned();
         let submitted = self
             .client
-            .submit_transaction_call(None, celenium_rpc_core::SubmitTransactionRequest::new(rpc_tx, false))
+            .submit_transaction_call(None, celenium_rpc_core::SubmitTransactionRequest::new(prepared.transaction, false))
             .await
             .context("submit_transaction rejected")?
             .transaction_id
             .to_string();
-
-        if submitted != txid {
-            return Err(anyhow::anyhow!("node returned transaction id {submitted} does not match the sent tx {txid}"));
-        }
-
+        anyhow::ensure!(submitted == expected, "node returned a different transaction id");
         Ok(submitted)
     }
 
-    /// Current minimum fee for a standard transfer, in pradha.
-    ///
-    /// Derived from the node's own fee estimator (low bucket, pradha/gram) so
-    /// the wallet's displayed fee tracks the network's live policy instead of a
-    /// hardcoded constant. The mass factor is a conservative estimate for a
-    /// standard two-output transfer (payment + change); the node still enforces
-    /// the exact minimum at submit, so over-estimating is safe (the excess comes
-    /// back as change) while under-estimating is not.
     pub async fn estimate_standard_fee(&self) -> Result<u64> {
-        /// Mass for a standard 1-input, 2-output transfer, in grams.
-        /// A conservative default (not hard minimum) to size the fee estimate
-        /// returned to clients; the node enforces the exact minimum at submit.
-        const STANDARD_TRANSFER_MASS: f64 = 1100.0;
-        /// Fallback feerate (pradha/gram) when the estimator returns no bucket.
-        /// Matches the node's minimum relay policy (250 pradha/kg = 0.25 pradha/gram).
-        const FALLBACK_FEERATE: f64 = 0.25;
-
-        let response = self.client.get_fee_estimate_call(None, GetFeeEstimateRequest {}).await.context("get_fee_estimate failed")?;
-        let feerate = response.estimate.low_buckets.first().map(|bucket| bucket.feerate).unwrap_or(FALLBACK_FEERATE);
-        Ok((feerate * STANDARD_TRANSFER_MASS).ceil() as u64)
+        let info = self.client.get_server_info_call(None, GetServerInfoRequest {}).await.context("get_server_info failed")?;
+        let params = crate::transfer::network_params(info.network_id)?;
+        crate::transfer::fee_for_mass(crate::transfer::standard_transfer_mass(&params), self.transfer_feerate().await?)
     }
 
     pub async fn get_current_block_color(&self, block_hash: &str) -> Result<bool> {

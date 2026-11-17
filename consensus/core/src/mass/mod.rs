@@ -335,18 +335,25 @@ pub struct MassCalculator {
     mass_per_tx_byte: u64,
     mass_per_script_pub_key_byte: u64,
     storage_mass_parameter: u64,
+    storage_mass_amount_floor: u64,
 }
 
 impl MassCalculator {
     pub fn new(mass_per_tx_byte: u64, mass_per_script_pub_key_byte: u64, storage_mass_parameter: u64) -> Self {
-        Self { mass_per_tx_byte, mass_per_script_pub_key_byte, storage_mass_parameter }
+        Self { mass_per_tx_byte, mass_per_script_pub_key_byte, storage_mass_parameter, storage_mass_amount_floor: 0 }
     }
 
     pub fn new_with_consensus_params(consensus_params: &Params) -> Self {
+        assert!(
+            consensus_params.storage_mass_amount_floor == 0
+                || consensus_params.net.network_type == crate::network::NetworkType::Simnet,
+            "storage_mass_amount_floor is restricted to simnet"
+        );
         Self {
             mass_per_tx_byte: consensus_params.mass_per_tx_byte,
             mass_per_script_pub_key_byte: consensus_params.mass_per_script_pub_key_byte,
             storage_mass_parameter: consensus_params.storage_mass_parameter,
+            storage_mass_amount_floor: consensus_params.storage_mass_amount_floor,
         }
     }
 
@@ -397,14 +404,33 @@ impl MassCalculator {
     ///
     /// Otherwise this function should never fail.
     pub fn calc_contextual_masses(&self, tx: &impl VerifiableTransaction) -> Option<ContextualMasses> {
-        calc_storage_mass(
+        calc_storage_mass_with_floor(
             tx.is_coinbase(),
             tx.populated_inputs().map(|(_, entry)| entry.into()),
             tx.outputs().iter().map(|out| out.into()),
             self.storage_mass_parameter,
+            self.storage_mass_amount_floor,
         )
         .map(ContextualMasses::new)
     }
+}
+
+fn calc_storage_mass_with_floor(
+    is_coinbase: bool,
+    inputs: impl ExactSizeIterator<Item = UtxoCell> + Clone,
+    outputs: impl Iterator<Item = UtxoCell>,
+    storm_param: u64,
+    amount_floor: u64,
+) -> Option<u64> {
+    if amount_floor == 0 || is_coinbase {
+        return calc_storage_mass(is_coinbase, inputs, outputs, storm_param);
+    }
+
+    // Clamp calculation cells on both sides; transaction and UTXO values stay unchanged.
+    let inputs = inputs.map(|cell| UtxoCell { amount: cell.amount.max(amount_floor), ..cell });
+    let outputs = outputs.map(|cell| UtxoCell { amount: cell.amount.max(amount_floor), ..cell });
+    inputs.clone().try_fold(0u64, |total, cell| total.checked_add(cell.amount))?;
+    calc_storage_mass(is_coinbase, inputs, outputs, storm_param)
 }
 
 /// Calculates the storage mass (KIP-0009) for a given set of inputs and outputs.
@@ -780,6 +806,126 @@ mod tests {
     fn generate_script_for_plurality(desired_plurality: u64) -> ScriptPublicKey {
         let required_script_len = ((desired_plurality - 1) * UTXO_UNIT_SIZE) as usize;
         ScriptPublicKey::from_vec(0, vec![1; required_script_len])
+    }
+
+    #[test]
+    fn opt_in_storage_floor_allows_small_outputs_without_changing_values() {
+        use crate::config::params::{OverrideParams, SIMNET_PARAMS};
+
+        let overrides: OverrideParams = serde_json::from_str(r#"{"storage_mass_amount_floor":4000000}"#).unwrap();
+        let params = SIMNET_PARAMS.override_params(overrides);
+        let calculator = MassCalculator::new_with_consensus_params(&params);
+        for amount in [1, 1_000] {
+            let tx = generate_tx_from_amounts(&[2_079_547], &[amount, 2_079_547 - amount - 509]);
+            let mass = calculator.calc_contextual_masses(&tx.as_verifiable()).unwrap();
+            assert_eq!(mass.storage_mass, 250_000);
+            assert!(mass.storage_mass <= params.block_mass_limits.storage);
+            assert_eq!(tx.tx.outputs[0].value, amount);
+            assert_eq!(tx.entries[0].as_ref().unwrap().amount, 2_079_547);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "storage_mass_amount_floor is restricted to simnet")]
+    fn storage_floor_rejects_mainnet_activation() {
+        let mut params = crate::config::params::MAINNET_PARAMS;
+        params.storage_mass_amount_floor = 4_000_000;
+        MassCalculator::new_with_consensus_params(&params);
+    }
+
+    #[test]
+    fn storage_floor_zero_preserves_all_network_defaults() {
+        for network in NetworkType::iter() {
+            let params: Params = network.into();
+            assert_eq!(params.storage_mass_amount_floor, 0);
+            let calculator = MassCalculator::new_with_consensus_params(&params);
+            for (ins, outs) in [
+                (vec![2_079_547], vec![1_000, 2_078_038]),
+                (vec![100, 200], vec![50, 250]),
+                (vec![100, 200, 300], vec![50, 550]),
+                (vec![100, 200, 300], vec![100; 5]),
+            ] {
+                let tx = generate_tx_from_amounts(&ins, &outs);
+                let legacy = calc_storage_mass(
+                    false,
+                    tx.entries.iter().map(|entry| entry.as_ref().unwrap().into()),
+                    tx.tx.outputs.iter().map(Into::into),
+                    params.storage_mass_parameter,
+                );
+                assert_eq!(calculator.calc_contextual_masses(&tx.as_verifiable()).map(|mass| mass.storage_mass), legacy);
+                assert_eq!(
+                    MassCalculator::new(params.mass_per_tx_byte, params.mass_per_script_pub_key_byte, params.storage_mass_parameter)
+                        .calc_contextual_masses(&tx.as_verifiable())
+                        .map(|mass| mass.storage_mass),
+                    legacy
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn storage_floor_preserves_large_values_and_script_plurality_costs() {
+        let cells = |amounts: &[u64], plurality| amounts.iter().map(move |&amount| UtxoCell { amount, plurality }).collect::<Vec<_>>();
+        let ins = cells(&[8_000_000, 12_000_000, 16_000_000], 1);
+        let outs = cells(&[4_000_000, 8_000_000, 8_000_000], 2);
+        assert_eq!(
+            calc_storage_mass_with_floor(false, ins.iter().copied(), outs.iter().copied(), STORAGE_MASS_PARAMETER, 4_000_000),
+            calc_storage_mass(false, ins.iter().copied(), outs.iter().copied(), STORAGE_MASS_PARAMETER)
+        );
+        let ins = cells(&[1_000], 1);
+        let outs = cells(&[1], 2);
+        assert_eq!(
+            calc_storage_mass_with_floor(false, ins.iter().copied(), outs.iter().copied(), STORAGE_MASS_PARAMETER, 4_000_000),
+            Some(750_000)
+        );
+    }
+
+    #[test]
+    fn storage_floor_charges_each_net_new_small_output() {
+        for inputs in [1, 2, 3] {
+            let ins = vec![UtxoCell { amount: 1_000, plurality: 1 }; inputs];
+            for outputs in 1..=5 {
+                let outs = vec![UtxoCell { amount: 1, plurality: 1 }; outputs];
+                let mass =
+                    calc_storage_mass_with_floor(false, ins.iter().copied(), outs.iter().copied(), STORAGE_MASS_PARAMETER, 4_000_000)
+                        .unwrap();
+                assert_eq!(mass, outputs.saturating_sub(inputs) as u64 * 250_000);
+            }
+        }
+    }
+
+    #[test]
+    fn storage_floor_caps_standard_output_cost_without_removing_the_block_limit() {
+        let params = crate::config::params::SIMNET_PARAMS;
+        for amount in [1, 1_000, 3_999_999, 4_000_000] {
+            let ins = [UtxoCell { amount: 20_000_000, plurality: 1 }];
+            let outs = [UtxoCell { amount, plurality: 1 }; 2];
+            let mass =
+                calc_storage_mass_with_floor(false, ins.into_iter(), outs.into_iter(), params.storage_mass_parameter, 4_000_000)
+                    .unwrap();
+            assert_eq!(mass, 450_000);
+            assert!(mass <= params.block_mass_limits.storage);
+            let outs = [UtxoCell { amount, plurality: 1 }; 3];
+            let mass =
+                calc_storage_mass_with_floor(false, ins.into_iter(), outs.into_iter(), params.storage_mass_parameter, 4_000_000)
+                    .unwrap();
+            assert_eq!(mass, 700_000);
+            assert!(mass > params.block_mass_limits.storage);
+        }
+    }
+
+    #[test]
+    fn storage_floor_rejects_effective_input_sum_overflow() {
+        let inputs = [UtxoCell { amount: 1, plurality: 1 }; 3];
+        let outputs = [UtxoCell { amount: 1, plurality: 1 }; 2];
+        assert_eq!(
+            calc_storage_mass_with_floor(false, inputs.into_iter(), outputs.into_iter(), STORAGE_MASS_PARAMETER, u64::MAX),
+            None
+        );
+        assert_eq!(
+            calc_storage_mass_with_floor(true, inputs.into_iter(), outputs.into_iter(), STORAGE_MASS_PARAMETER, u64::MAX),
+            Some(0)
+        );
     }
 
     #[test]
