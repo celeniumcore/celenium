@@ -8,6 +8,7 @@ pub mod faucet;
 pub mod faucet_funding;
 pub mod faucet_signer;
 pub mod hasher;
+mod http_request;
 pub mod jsonrpc_event;
 pub mod log_colors;
 pub mod mining_state;

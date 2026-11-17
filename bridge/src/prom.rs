@@ -1140,18 +1140,11 @@ async fn handle_one_connection(
     mut stream: tokio::net::TcpStream,
     mode: HttpMode,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use tokio::io::AsyncReadExt;
-
-    let mut buffer = [0u8; 8192];
-
-    match timeout(READ_TIMEOUT, stream.read(&mut buffer)).await {
-        Ok(Ok(0)) => Ok(()),
-        Ok(Ok(n)) => {
-            let request = String::from_utf8_lossy(&buffer[..n]);
-            handle_http_request(stream, &request, &mode).await
-        }
-        Ok(Err(_)) => Ok(()),
-        Err(_) => Ok(()),
+    match timeout(READ_TIMEOUT, crate::http_request::read(&mut stream)).await {
+        Ok(Ok(Ok(Some(request)))) => handle_http_request(stream, &request, &mode).await,
+        Ok(Ok(Err(error))) => send_response(stream, error.response()).await,
+        Ok(Ok(Ok(None))) | Ok(Err(_)) => Ok(()),
+        Err(_) => send_response(stream, "HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await,
     }
 }
 

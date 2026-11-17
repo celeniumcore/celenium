@@ -334,32 +334,26 @@ async fn reserve_fork_preserves_genesis_and_conserves_parallel_acceptance_interv
     assert_eq!(config.genesis.hash, MAINNET_PARAMS.genesis.hash);
     let mut ctx = TestContext::new(TestConsensus::new(&config));
     let schedule = ActivationSchedule::new(activation).unwrap();
-    let mut issuance = 0u64;
-    let mut previous_daa = 0;
-    let mut allocations = 0;
-    for _ in 0..6 {
+    let genesis_txid = config.genesis.build_genesis_transactions()[0].id();
+    for _ in 0..12 {
         ctx.build_block_template_row(0..3).validate_and_insert_row().await.assert_valid_utxo_tip();
-        let template = ctx.build_block_template(90, ctx.simulated_time + 100);
+        ctx.simulated_time += 100;
+        let template = ctx.build_block_template(90, ctx.simulated_time);
         let daa = template.block.header.daa_score;
         let coinbase = &template.block.transactions[0];
+        let entries = ctx.consensus.get_virtual_utxos(None, 10_000, false);
+        let issued: u64 = entries.iter().filter(|(op, _)| op.transaction_id != genesis_txid).map(|(_, entry)| entry.amount).sum();
         let paid: u64 = coinbase.outputs.iter().map(|output| output.value).sum();
-        let crossing = previous_daa < activation && daa >= activation;
-        let expected = schedule.cumulative(daa) - schedule.cumulative(previous_daa) + if crossing { INITIAL_RESERVE } else { 0 };
-        assert_eq!(paid, expected, "interval {previous_daa}..{daa}");
-        let floor =
-            coinbase.outputs.iter().filter(|output| output.script_public_key == floor_script).map(|output| output.value).sum::<u64>();
-        let faucet =
-            coinbase.outputs.iter().filter(|output| output.script_public_key == faucet_script).map(|output| output.value).sum::<u64>();
-        assert_eq!(floor, if crossing { GENERAL_RESERVE } else { 0 });
-        assert_eq!(faucet, if crossing { FAUCET_RESERVE } else { 0 });
-        allocations += usize::from(crossing);
-        issuance += paid;
-        previous_daa = daa;
+        assert_eq!(issued + paid, schedule.cumulative(daa) + if daa >= activation { INITIAL_RESERVE } else { 0 }, "virtual DAA {daa}");
+        let allocation_total = |script: &ScriptPublicKey| {
+            entries.iter().filter(|(_, entry)| &entry.script_public_key == script).map(|(_, entry)| entry.amount).sum::<u64>()
+                + coinbase.outputs.iter().filter(|output| &output.script_public_key == script).map(|output| output.value).sum::<u64>()
+        };
+        assert_eq!(allocation_total(&floor_script), if daa >= activation { GENERAL_RESERVE } else { 0 });
+        assert_eq!(allocation_total(&faucet_script), if daa >= activation { FAUCET_RESERVE } else { 0 });
         ctx.current_templates.push_back(template);
         ctx.validate_and_insert_row().await.assert_valid_utxo_tip();
     }
-    assert_eq!(allocations, 1);
-    assert_eq!(issuance, schedule.cumulative(previous_daa) + INITIAL_RESERVE);
 }
 
 fn new_miner_data() -> MinerData {
