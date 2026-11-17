@@ -312,6 +312,56 @@ async fn double_search_disqualified_test() {
     ctx.assert_tips_num(1);
 }
 
+#[tokio::test]
+async fn reserve_fork_preserves_genesis_and_conserves_parallel_acceptance_intervals() {
+    use celenium_consensus_core::config::{
+        genesis::MiningReserveFork,
+        mining_reserve::{ActivationSchedule, FAUCET_RESERVE, GENERAL_RESERVE, INITIAL_RESERVE},
+    };
+    let floor_script = ScriptPublicKey::from_vec(0, vec![1, 42]);
+    let faucet_script = ScriptPublicKey::from_vec(0, vec![1, 43]);
+    let activation = 5;
+    let config = ConfigBuilder::new(MAINNET_PARAMS)
+        .skip_proof_of_work()
+        .edit_consensus_params(|p| {
+            p.mining_reserve_fork = Some(MiningReserveFork {
+                activation_daa_score: activation,
+                floor_script: floor_script.clone(),
+                faucet_script: faucet_script.clone(),
+            });
+        })
+        .build();
+    assert_eq!(config.genesis.hash, MAINNET_PARAMS.genesis.hash);
+    let mut ctx = TestContext::new(TestConsensus::new(&config));
+    let schedule = ActivationSchedule::new(activation).unwrap();
+    let mut issuance = 0u64;
+    let mut previous_daa = 0;
+    let mut allocations = 0;
+    for _ in 0..6 {
+        ctx.build_block_template_row(0..3).validate_and_insert_row().await.assert_valid_utxo_tip();
+        let template = ctx.build_block_template(90, ctx.simulated_time + 100);
+        let daa = template.block.header.daa_score;
+        let coinbase = &template.block.transactions[0];
+        let paid: u64 = coinbase.outputs.iter().map(|output| output.value).sum();
+        let crossing = previous_daa < activation && daa >= activation;
+        let expected = schedule.cumulative(daa) - schedule.cumulative(previous_daa) + if crossing { INITIAL_RESERVE } else { 0 };
+        assert_eq!(paid, expected, "interval {previous_daa}..{daa}");
+        let floor =
+            coinbase.outputs.iter().filter(|output| output.script_public_key == floor_script).map(|output| output.value).sum::<u64>();
+        let faucet =
+            coinbase.outputs.iter().filter(|output| output.script_public_key == faucet_script).map(|output| output.value).sum::<u64>();
+        assert_eq!(floor, if crossing { GENERAL_RESERVE } else { 0 });
+        assert_eq!(faucet, if crossing { FAUCET_RESERVE } else { 0 });
+        allocations += usize::from(crossing);
+        issuance += paid;
+        previous_daa = daa;
+        ctx.current_templates.push_back(template);
+        ctx.validate_and_insert_row().await.assert_valid_utxo_tip();
+    }
+    assert_eq!(allocations, 1);
+    assert_eq!(issuance, schedule.cumulative(previous_daa) + INITIAL_RESERVE);
+}
+
 fn new_miner_data() -> MinerData {
     let secp = secp256k1::Secp256k1::new();
     let mut rng = rand::thread_rng();

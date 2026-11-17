@@ -127,7 +127,9 @@ impl ConsensusServices {
             params.deflationary_phase_daa_score,
             params.pre_deflationary_phase_base_subsidy,
             params.bps_history(),
-        ).with_mining_reserve(params.genesis.mining_reserve.is_some());
+        )
+        .with_mining_reserve(params.genesis.mining_reserve.is_some())
+        .with_reserve_fork(params.mining_reserve_fork.clone());
 
         let mass_calculator = MassCalculator::new_with_consensus_params(params);
 

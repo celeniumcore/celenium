@@ -277,6 +277,63 @@ mod tests {
     use super::*;
 
     #[test]
+    fn old_empty_journal_still_loads() {
+        let journal: TreasuryJournal = serde_json::from_str(
+            r#"{"pending":null,"last_txid":"previous","total_returned_pradha":9,"last_sweep_secs":12}"#,
+        ).unwrap();
+        assert!(journal.can_prepare());
+        assert_eq!(journal.last_txid.as_deref(), Some("previous"));
+        assert_eq!(journal.total_returned_pradha, 9);
+    }
+
+    #[test]
+    fn legacy_pending_transfer_keeps_transaction_without_new_metadata() {
+        let journal: TreasuryJournal = serde_json::from_str(r#"{
+            "pending": {
+                "transaction_json":"signed-legacy-transaction",
+                "transaction_id":"legacy-txid",
+                "amount_pradha":100000000,
+                "fee_pradha":275,
+                "source":"reserve",
+                "destination":"recipient",
+                "network":"simnet"
+            },
+            "last_txid":null,"total_returned_pradha":0,"last_sweep_secs":0
+        }"#).unwrap();
+        assert!(!journal.can_prepare());
+        let pending = journal.pending.unwrap();
+        assert_eq!(pending.transaction_json, "signed-legacy-transaction");
+        assert_eq!(pending.transaction_id, "legacy-txid");
+        assert!(!pending.withdrawal);
+        assert!(pending.anchor.is_none());
+        assert!(pending.input_entries.is_empty());
+    }
+
+    #[test]
+    fn legacy_balance_above_cap_survives_save_and_idempotent_settlement() {
+        let path = std::env::temp_dir().join(format!("legacy-faucet-{}.json", uuid::Uuid::new_v4()));
+        let address = "legacy-recipient";
+        let amount = crate::faucet::FAUCET_MAX_OUTSTANDING_PRADHA + 100_000_000;
+        let fixture = serde_json::json!({
+            "ledger": { address: { "balance_pradha": amount, "last_claim_day": 0, "total_claimed_pradha": amount } },
+            "devices": {}, "claimed_today": 0, "claim_day": 0
+        });
+        std::fs::write(&path, serde_json::to_vec(&fixture).unwrap()).unwrap();
+        let mut state = FaucetState::load(&path).unwrap();
+        assert_eq!(state.total_outstanding(), amount);
+        state.save(&path).unwrap();
+        let mut state = FaucetState::load(&path).unwrap();
+        assert_eq!(state.balance(address).unwrap().balance_pradha, amount);
+        assert!(state.settle_withdrawal("legacy-payment", address, 100_000_000, 509));
+        state.save(&path).unwrap();
+        let mut state = FaucetState::load(&path).unwrap();
+        assert!(state.settle_withdrawal("legacy-payment", address, 100_000_000, 509));
+        assert_eq!(state.total_outstanding(), crate::faucet::FAUCET_MAX_OUTSTANDING_PRADHA);
+        assert_eq!(state.fees_today(), 509);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn reserve_withdrawal_replay_keeps_signed_transaction_and_source() {
         let pending = PendingTransfer {
             transaction_json: "signed-transaction-fixture".into(),

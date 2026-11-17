@@ -309,6 +309,14 @@ pub struct MiningReserveAllocation {
     pub faucet_script: ScriptPublicKey,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MiningReserveFork {
+    pub activation_daa_score: u64,
+    pub floor_script: ScriptPublicKey,
+    pub faucet_script: ScriptPublicKey,
+}
+
 /// The constants uniquely representing the genesis block
 #[derive(Clone, Debug)]
 pub struct GenesisBlock {
@@ -333,8 +341,11 @@ impl GenesisBlock {
         for tx in &transactions {
             for (index, output) in tx.outputs.iter().enumerate() {
                 let entry = UtxoEntry {
-                    amount: output.value, script_public_key: output.script_public_key.clone(),
-                    block_daa_score: 0, is_coinbase: false, covenant_id: None,
+                    amount: output.value,
+                    script_public_key: output.script_public_key.clone(),
+                    block_daa_score: 0,
+                    is_coinbase: false,
+                    covenant_id: None,
                 };
                 multiset.add_utxo(&TransactionOutpoint::new(tx.id(), index as u32), &entry);
             }
@@ -350,15 +361,7 @@ impl GenesisBlock {
             outputs.push(TransactionOutput::new(super::mining_reserve::GENERAL_RESERVE, allocation.floor_script.clone()));
             outputs.push(TransactionOutput::new(super::mining_reserve::FAUCET_RESERVE, allocation.faucet_script.clone()));
         }
-        vec![Transaction::new(
-            0,
-            Vec::new(),
-            outputs,
-            0,
-            SUBNETWORK_ID_COINBASE,
-            0,
-            self.coinbase_payload.to_vec(),
-        )]
+        vec![Transaction::new(0, Vec::new(), outputs, 0, SUBNETWORK_ID_COINBASE, 0, self.coinbase_payload.to_vec())]
     }
 }
 
@@ -538,7 +541,8 @@ mod tests {
         let mut funded = baseline.clone();
         let floor_script = ScriptPublicKey::from_vec(0, [vec![0x20], vec![1; 32], vec![0xac]].concat());
         let faucet_script = ScriptPublicKey::from_vec(0, [vec![0x20], vec![2; 32], vec![0xac]].concat());
-        funded.mining_reserve = Some(MiningReserveAllocation { floor_script: floor_script.clone(), faucet_script: faucet_script.clone() });
+        funded.mining_reserve =
+            Some(MiningReserveAllocation { floor_script: floor_script.clone(), faucet_script: faucet_script.clone() });
         funded.recompute_commitments();
         let transactions = funded.build_genesis_transactions();
         let outputs = &transactions[0].outputs;

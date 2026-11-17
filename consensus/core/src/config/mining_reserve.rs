@@ -38,9 +38,70 @@ pub fn mining_subsidy(daa: u64) -> u64 {
     cumulative_mining(daa.saturating_add(1)).saturating_sub(cumulative_mining(daa))
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ActivationSchedule {
+    activation: u64,
+}
+
+impl ActivationSchedule {
+    pub fn new(activation: u64) -> Option<Self> {
+        (activation > 0 && activation < 48 * BLOCKS_PER_MONTH).then_some(Self { activation })
+    }
+
+    pub fn cumulative(&self, daa: u64) -> u64 {
+        let score = daa.min(END_DAA);
+        let historical = self.activation * FIRST_SUBSIDY;
+        if score <= self.activation {
+            return score * FIRST_SUBSIDY;
+        }
+        let prefix = |at: u64| {
+            let month = (at / BLOCKS_PER_MONTH) as usize;
+            LEGACY_PREFIX[month] + SUBSIDY_BY_MONTH_TABLE[month].div_ceil(BPS) * (at % BLOCKS_PER_MONTH)
+        };
+        let remaining_weight = prefix(END_DAA) - prefix(self.activation);
+        let remaining_mining = MINING_BUDGET - INITIAL_RESERVE - historical;
+        historical + (((prefix(score) - prefix(self.activation)) as u128 * remaining_mining as u128) / remaining_weight as u128) as u64
+    }
+
+    pub fn subsidy_at_acceptance_index(&self, index: u64) -> u64 {
+        self.cumulative(index.saturating_add(1)).saturating_sub(self.cumulative(index))
+    }
+
+    pub fn crosses_activation(&self, start: u64, end: u64) -> bool {
+        start < self.activation && end >= self.activation
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activation_preserves_history_and_allocates_reserve_from_the_mining_budget() {
+        let schedule = ActivationSchedule::new(1000).unwrap();
+        assert_eq!(schedule.cumulative(999), 999 * FIRST_SUBSIDY);
+        assert_eq!(schedule.cumulative(1000), 1000 * FIRST_SUBSIDY);
+        assert_eq!(schedule.cumulative(END_DAA) + INITIAL_RESERVE, MINING_BUDGET);
+        assert!(schedule.crosses_activation(998, 1001));
+        assert!(!schedule.crosses_activation(1000, 1001));
+        assert!(ActivationSchedule::new(0).is_none());
+        assert!(ActivationSchedule::new(48 * BLOCKS_PER_MONTH).is_none());
+    }
+
+    #[test]
+    fn partitioned_acceptance_intervals_conserve_emission_across_halvings() {
+        let schedule = ActivationSchedule::new(1000).unwrap();
+        let mut start = 1000;
+        let mut sum = 0;
+        for end in [1001, 1007, BLOCKS_PER_MONTH, 48 * BLOCKS_PER_MONTH - 1, 48 * BLOCKS_PER_MONTH + 3, END_DAA - 1, END_DAA] {
+            sum += schedule.cumulative(end) - schedule.cumulative(start);
+            start = end;
+        }
+        assert_eq!(sum + 1000 * FIRST_SUBSIDY + INITIAL_RESERVE, MINING_BUDGET);
+        let boundary = 48 * BLOCKS_PER_MONTH;
+        let siblings_merged = (boundary - 1..boundary + 1).map(|index| schedule.subsidy_at_acceptance_index(index)).sum::<u64>();
+        assert_eq!(siblings_merged, schedule.cumulative(boundary + 1) - schedule.cumulative(boundary - 1));
+    }
 
     #[test]
     fn every_month_telescopes_to_fifty_million_without_exceeding_legacy_rewards() {

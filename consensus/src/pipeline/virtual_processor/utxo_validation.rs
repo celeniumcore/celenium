@@ -15,6 +15,7 @@ use crate::{
             errors::{TxResult, TxRuleError},
             tx_validation_in_utxo_context::TxValidationFlags,
         },
+        window::WindowManager,
     },
 };
 use celenium_consensus_core::errors::block::RuleError::{
@@ -116,6 +117,19 @@ impl VirtualStateProcessor {
         ctx.multiset_hash.add_transaction(&validated_coinbase, pov_daa_score);
         let validated_coinbase_id = validated_coinbase.id();
 
+        let reward_window = self
+            .coinbase_manager
+            .accepted_slot_subsidy(0)
+            .map(|_| self.window_manager.block_daa_window(&ctx.ghostdag_data).expect("validated DAA window"));
+        let active = reward_window.as_ref().is_some_and(|window| self.coinbase_manager.reserve_fork_active(window.daa_score));
+        let excluded = reward_window.as_ref().map(|window| &window.mergeset_non_daa);
+        let eligible =
+            ctx.ghostdag_data.unordered_mergeset().filter(|hash| excluded.is_none_or(|set| !set.contains(hash))).count() as u64;
+        let mut acceptance_index = reward_window
+            .as_ref()
+            .map(|window| window.daa_score.checked_sub(eligible).expect("DAA covers eligible mergeset"))
+            .unwrap_or(0);
+
         for (i, (merged_block, txs)) in once((ctx.selected_parent(), selected_parent_transactions))
             .chain(
                 ctx.ghostdag_data
@@ -171,10 +185,15 @@ impl VirtualStateProcessor {
             });
 
             let coinbase_data = self.coinbase_manager.deserialize_coinbase_payload(&txs[0].payload).unwrap();
-            ctx.mergeset_rewards.insert(
-                merged_block,
-                BlockRewardData::new(coinbase_data.subsidy, block_fee, coinbase_data.miner_data.script_public_key),
-            );
+            let subsidy = if active && excluded.is_none_or(|set| !set.contains(&merged_block)) {
+                let subsidy = self.coinbase_manager.accepted_slot_subsidy(acceptance_index).expect("active reserve fork");
+                acceptance_index += 1;
+                subsidy
+            } else {
+                coinbase_data.subsidy
+            };
+            ctx.mergeset_rewards
+                .insert(merged_block, BlockRewardData::new(subsidy, block_fee, coinbase_data.miner_data.script_public_key));
         }
     }
 

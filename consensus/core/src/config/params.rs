@@ -255,6 +255,8 @@ pub struct OverrideParams {
 
     pub pre_deflationary_phase_base_subsidy: Option<u64>,
     pub mining_reserve: Option<super::genesis::MiningReserveAllocation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mining_reserve_fork: Option<super::genesis::MiningReserveFork>,
     pub skip_proof_of_work: Option<bool>,
     pub max_block_level: Option<BlockLevel>,
     pub pruning_proof_m: Option<u64>,
@@ -293,6 +295,7 @@ impl From<Params> for OverrideParams {
             deflationary_phase_daa_score: Some(p.deflationary_phase_daa_score),
             pre_deflationary_phase_base_subsidy: Some(p.pre_deflationary_phase_base_subsidy),
             mining_reserve: p.genesis.mining_reserve.clone(),
+            mining_reserve_fork: p.mining_reserve_fork.clone(),
             skip_proof_of_work: Some(p.skip_proof_of_work),
             max_block_level: Some(p.max_block_level),
             pruning_proof_m: Some(p.pruning_proof_m),
@@ -310,6 +313,7 @@ pub struct Params {
     pub dns_seeders: &'static [&'static str],
     pub net: NetworkId,
     pub genesis: GenesisBlock,
+    pub mining_reserve_fork: Option<super::genesis::MiningReserveFork>,
 
     /// Timestamp deviation tolerance (in seconds)
     pub timestamp_deviation_tolerance: u64,
@@ -519,6 +523,7 @@ impl Params {
             dns_seeders: self.dns_seeders,
             net: self.net,
             genesis,
+            mining_reserve_fork: overrides.mining_reserve_fork.or(self.mining_reserve_fork),
 
             timestamp_deviation_tolerance: overrides.timestamp_deviation_tolerance.unwrap_or(self.timestamp_deviation_tolerance),
 
@@ -616,6 +621,7 @@ pub const MAINNET_PARAMS: Params = Params {
     dns_seeders: &[],
     net: NetworkId::new(NetworkType::Mainnet),
     genesis: GENESIS,
+    mining_reserve_fork: None,
     timestamp_deviation_tolerance: TIMESTAMP_DEVIATION_TOLERANCE,
     max_difficulty_target: MAX_DIFFICULTY_TARGET,
     max_difficulty_target_f64: MAX_DIFFICULTY_TARGET_AS_F64,
@@ -668,6 +674,7 @@ pub const TESTNET_PARAMS: Params = Params {
     dns_seeders: &["seed.celenium.test"],
     net: NetworkId::with_suffix(NetworkType::Testnet, 10),
     genesis: TESTNET_GENESIS,
+    mining_reserve_fork: None,
     timestamp_deviation_tolerance: TIMESTAMP_DEVIATION_TOLERANCE,
     max_difficulty_target: MAX_DIFFICULTY_TARGET,
     max_difficulty_target_f64: MAX_DIFFICULTY_TARGET_AS_F64,
@@ -714,6 +721,7 @@ pub const SIMNET_PARAMS: Params = Params {
     dns_seeders: &[],
     net: NetworkId::new(NetworkType::Simnet),
     genesis: SIMNET_GENESIS,
+    mining_reserve_fork: None,
     timestamp_deviation_tolerance: TIMESTAMP_DEVIATION_TOLERANCE,
     max_difficulty_target: MAX_DIFFICULTY_TARGET,
     max_difficulty_target_f64: MAX_DIFFICULTY_TARGET_AS_F64,
@@ -757,6 +765,7 @@ pub const DEVNET_PARAMS: Params = Params {
     dns_seeders: &[],
     net: NetworkId::new(NetworkType::Devnet),
     genesis: DEVNET_GENESIS,
+    mining_reserve_fork: None,
     timestamp_deviation_tolerance: TIMESTAMP_DEVIATION_TOLERANCE,
     max_difficulty_target: MAX_DIFFICULTY_TARGET,
     max_difficulty_target_f64: MAX_DIFFICULTY_TARGET_AS_F64,

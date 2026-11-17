@@ -42,6 +42,7 @@ pub struct CoinbaseManager {
     /// order to correctly determine the subsidy month from the live DAA score of the network   
     crescendo_activation_daa_score: u64,
     mining_reserve: bool,
+    reserve_fork: Option<celenium_consensus_core::config::genesis::MiningReserveFork>,
 }
 
 /// Struct used to streamline payload parsing
@@ -87,6 +88,7 @@ impl CoinbaseManager {
             subsidy_by_month_table_after,
             crescendo_activation_daa_score: bps_history.activation().daa_score(),
             mining_reserve: false,
+            reserve_fork: None,
         }
     }
 
@@ -98,6 +100,30 @@ impl CoinbaseManager {
         }
         self.mining_reserve = enabled;
         self
+    }
+
+    pub fn with_reserve_fork(mut self, fork: Option<celenium_consensus_core::config::genesis::MiningReserveFork>) -> Self {
+        if let Some(fork) = &fork {
+            assert!(!self.mining_reserve, "genesis reserve and activation fork cannot coexist");
+            assert_eq!(self.bps_history.before(), 10);
+            assert_eq!(self.bps_history.after(), 10);
+            assert_eq!(self.deflationary_phase_daa_score, 0);
+            assert!(celenium_consensus_core::config::mining_reserve::ActivationSchedule::new(fork.activation_daa_score).is_some());
+        }
+        self.reserve_fork = fork;
+        self
+    }
+
+    pub fn reserve_fork_active(&self, daa_score: u64) -> bool {
+        self.reserve_fork.as_ref().is_some_and(|fork| daa_score >= fork.activation_daa_score)
+    }
+
+    pub fn accepted_slot_subsidy(&self, index: u64) -> Option<u64> {
+        self.reserve_fork.as_ref().map(|fork| {
+            celenium_consensus_core::config::mining_reserve::ActivationSchedule::new(fork.activation_daa_score)
+                .expect("validated reserve fork")
+                .subsidy_at_acceptance_index(index)
+        })
     }
 
     #[cfg(test)]
@@ -141,6 +167,17 @@ impl CoinbaseManager {
 
         if red_reward > 0 {
             outputs.push(TransactionOutput::new(red_reward, miner_data.script_public_key.clone()));
+        }
+
+        if let Some(fork) = &self.reserve_fork {
+            let eligible = ghostdag_data.unordered_mergeset().filter(|hash| !mergeset_non_daa.contains(hash)).count() as u64;
+            let start = daa_score.checked_sub(eligible).expect("DAA score must cover eligible mergeset");
+            if start < fork.activation_daa_score && daa_score >= fork.activation_daa_score {
+                use celenium_consensus_core::config::mining_reserve::{FAUCET_RESERVE, GENERAL_RESERVE};
+                let index = outputs.len() - usize::from(red_reward > 0);
+                outputs.insert(index, TransactionOutput::new(GENERAL_RESERVE, fork.floor_script.clone()));
+                outputs.insert(index + 1, TransactionOutput::new(FAUCET_RESERVE, fork.faucet_script.clone()));
+            }
         }
 
         // Build the current block's payload
@@ -232,6 +269,9 @@ impl CoinbaseManager {
     }
 
     pub fn calc_block_subsidy(&self, daa_score: u64) -> u64 {
+        if self.reserve_fork_active(daa_score) {
+            return self.accepted_slot_subsidy(daa_score).expect("active reserve fork");
+        }
         if self.mining_reserve {
             return celenium_consensus_core::config::mining_reserve::mining_subsidy(daa_score);
         }
@@ -438,8 +478,23 @@ mod tests {
     #[test]
     fn subsidy_test() {
         let rates = [
-            20_795_466_u64, 10_397_733, 5_198_867, 2_599_433, 1_299_717, 649_858,
-            324_929, 162_465, 81_232, 40_616, 20_308, 10_154, 5_077, 2_539, 1_269, 635, 317,
+            20_795_466_u64,
+            10_397_733,
+            5_198_867,
+            2_599_433,
+            1_299_717,
+            649_858,
+            324_929,
+            162_465,
+            81_232,
+            40_616,
+            20_308,
+            10_154,
+            5_077,
+            2_539,
+            1_269,
+            635,
+            317,
         ];
         for network_id in NetworkId::iter() {
             let params: Params = network_id.into();
