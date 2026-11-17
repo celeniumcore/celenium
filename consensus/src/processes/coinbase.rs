@@ -41,6 +41,7 @@ pub struct CoinbaseManager {
     /// This score is required here long-term (and not only for the actual forking), in
     /// order to correctly determine the subsidy month from the live DAA score of the network   
     crescendo_activation_daa_score: u64,
+    mining_reserve: bool,
 }
 
 /// Struct used to streamline payload parsing
@@ -85,7 +86,18 @@ impl CoinbaseManager {
             subsidy_by_month_table_before,
             subsidy_by_month_table_after,
             crescendo_activation_daa_score: bps_history.activation().daa_score(),
+            mining_reserve: false,
         }
+    }
+
+    pub fn with_mining_reserve(mut self, enabled: bool) -> Self {
+        if enabled {
+            assert_eq!(self.bps_history.before(), 10);
+            assert_eq!(self.bps_history.after(), 10);
+            assert_eq!(self.deflationary_phase_daa_score, 0);
+        }
+        self.mining_reserve = enabled;
+        self
     }
 
     #[cfg(test)]
@@ -220,6 +232,9 @@ impl CoinbaseManager {
     }
 
     pub fn calc_block_subsidy(&self, daa_score: u64) -> u64 {
+        if self.mining_reserve {
+            return celenium_consensus_core::config::mining_reserve::mining_subsidy(daa_score);
+        }
         if daa_score < self.deflationary_phase_daa_score {
             return self.pre_deflationary_phase_base_subsidy;
         }
@@ -278,78 +293,7 @@ impl CoinbaseManager {
     every 4 years, total 52,500,000 CEN). The trailing zero stops emission:
     calc_block_subsidy clamps the month index to the last entry.
 */
-#[rustfmt::skip]
-const SUBSIDY_BY_MONTH_TABLE: [u64; 817] = [
-    20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466,
-    20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466,
-    20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466,
-    20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466, 20795466,
-    10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733,
-    10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733,
-    10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733,
-    10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733, 10397733,
-    5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867,
-    5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867,
-    5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867,
-    5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867, 5198867,
-    2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433,
-    2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433,
-    2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433,
-    2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433, 2599433,
-    1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717,
-    1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717,
-    1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717,
-    1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717, 1299717,
-    649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858,
-    649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858,
-    649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858,
-    649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858, 649858,
-    324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929,
-    324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929,
-    324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929,
-    324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929, 324929,
-    162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465,
-    162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465,
-    162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465,
-    162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465, 162465,
-    81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232,
-    81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232,
-    81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232,
-    81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232, 81232,
-    40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616,
-    40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616,
-    40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616,
-    40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616, 40616,
-    20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308,
-    20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308,
-    20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308,
-    20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308, 20308,
-    10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154,
-    10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154,
-    10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154,
-    10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154, 10154,
-    5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077,
-    5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077,
-    5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077,
-    5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077, 5077,
-    2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539,
-    2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539,
-    2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539,
-    2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539, 2539,
-    1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269,
-    1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269,
-    1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269,
-    1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269, 1269,
-    635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635,
-    635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635,
-    635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635,
-    635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635, 635,
-    317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317,
-    317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317,
-    317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317,
-    317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317, 317,
-    0,
-];
+pub use celenium_consensus_core::config::emission::SUBSIDY_BY_MONTH_TABLE;
 
 #[cfg(test)]
 mod tests {
@@ -361,6 +305,21 @@ mod tests {
         network::{NetworkId, NetworkType},
         tx::scriptvec,
     };
+
+    #[test]
+    fn reserve_allocation_reduces_real_block_subsidy_without_changing_legacy_mode() {
+        let legacy = create_manager(&SIMNET_PARAMS);
+        let allocated = create_manager(&SIMNET_PARAMS).with_mining_reserve(true);
+        assert_eq!(allocated.calc_block_subsidy(0), 0);
+        let mut sum = 0u64;
+        for daa in 1..1000 {
+            let actual = allocated.calc_block_subsidy(daa);
+            assert_eq!(actual, celenium_consensus_core::config::mining_reserve::mining_subsidy(daa));
+            assert!(actual < legacy.calc_block_subsidy(daa));
+            sum += actual;
+        }
+        assert_eq!(sum, celenium_consensus_core::config::mining_reserve::cumulative_mining(1000));
+    }
 
     #[test]
     fn calc_high_bps_total_rewards_delta() {
@@ -478,91 +437,26 @@ mod tests {
 
     #[test]
     fn subsidy_test() {
-        const PRE_DEFLATIONARY_PHASE_BASE_SUBSIDY: u64 = 50000000000;
-        const DEFLATIONARY_PHASE_INITIAL_SUBSIDY: u64 = 44000000000;
-        const SECONDS_PER_MONTH: u64 = 2629800;
-        const SECONDS_PER_HALVING: u64 = SECONDS_PER_MONTH * 12;
-
+        let rates = [
+            20_795_466_u64, 10_397_733, 5_198_867, 2_599_433, 1_299_717, 649_858,
+            324_929, 162_465, 81_232, 40_616, 20_308, 10_154, 5_077, 2_539, 1_269, 635, 317,
+        ];
         for network_id in NetworkId::iter() {
-            let mut params: Params = network_id.into();
-            if params.crescendo_activation != ForkActivation::always() {
-                // We test activation scenarios in verify_crescendo_emission_schedule
-                params.crescendo_activation = ForkActivation::never();
+            let params: Params = network_id.into();
+            let manager = create_manager(&params);
+            let bps = params.bps();
+            let era_blocks = 48 * SECONDS_PER_MONTH * bps;
+            assert_eq!(params.deflationary_phase_daa_score, 0);
+            assert_eq!(manager.calc_block_subsidy(1), rates[0].div_ceil(bps));
+            for (era, rate) in rates.into_iter().enumerate() {
+                let start = era as u64 * era_blocks;
+                let end = start + era_blocks;
+                let expected = rate.div_ceil(bps);
+                assert_eq!(manager.calc_block_subsidy(start), expected, "{network_id} era {era} start");
+                assert_eq!(manager.calc_block_subsidy(end - 1), expected, "{network_id} era {era} end");
             }
-            let cbm = create_manager(&params);
-            let bps = params.bps_history().before();
-
-            let pre_deflationary_phase_base_subsidy = PRE_DEFLATIONARY_PHASE_BASE_SUBSIDY / bps;
-            let deflationary_phase_initial_subsidy = DEFLATIONARY_PHASE_INITIAL_SUBSIDY / bps;
-            let blocks_per_halving = SECONDS_PER_HALVING * bps;
-
-            struct Test {
-                name: &'static str,
-                daa_score: u64,
-                expected: u64,
-            }
-
-            let mut tests = vec![
-                Test {
-                    name: "first mined block",
-                    daa_score: 1,
-                    expected: if params.deflationary_phase_daa_score > 0 {
-                        pre_deflationary_phase_base_subsidy
-                    } else {
-                        deflationary_phase_initial_subsidy
-                    },
-                },
-                Test {
-                    name: "start of deflationary phase",
-                    daa_score: params.deflationary_phase_daa_score,
-                    expected: deflationary_phase_initial_subsidy,
-                },
-                Test {
-                    name: "after one halving",
-                    daa_score: params.deflationary_phase_daa_score + blocks_per_halving,
-                    expected: deflationary_phase_initial_subsidy / 2,
-                },
-                Test {
-                    name: "after 2 halvings",
-                    daa_score: params.deflationary_phase_daa_score + 2 * blocks_per_halving,
-                    expected: deflationary_phase_initial_subsidy / 4,
-                },
-                Test {
-                    name: "after 5 halvings",
-                    daa_score: params.deflationary_phase_daa_score + 5 * blocks_per_halving,
-                    expected: deflationary_phase_initial_subsidy / 32,
-                },
-                Test {
-                    name: "after 32 halvings",
-                    daa_score: params.deflationary_phase_daa_score + 32 * blocks_per_halving,
-                    expected: (DEFLATIONARY_PHASE_INITIAL_SUBSIDY / 2_u64.pow(32)).div_ceil(bps),
-                },
-                Test {
-                    name: "just before subsidy depleted",
-                    daa_score: params.deflationary_phase_daa_score + 35 * blocks_per_halving,
-                    expected: 1,
-                },
-                Test {
-                    name: "after subsidy depleted",
-                    daa_score: params.deflationary_phase_daa_score + 36 * blocks_per_halving,
-                    expected: 0,
-                },
-            ];
-
-            if params.deflationary_phase_daa_score > 0 {
-                tests.push(Test {
-                    name: "before deflationary phase",
-                    daa_score: params.deflationary_phase_daa_score - 1,
-                    expected: pre_deflationary_phase_base_subsidy,
-                });
-            }
-
-            for t in tests {
-                assert_eq!(cbm.calc_block_subsidy(t.daa_score), t.expected, "{} test '{}' failed", network_id, t.name);
-                if bps == 1 {
-                    assert_eq!(cbm.legacy_calc_block_subsidy(t.daa_score), t.expected, "{} test '{}' failed", network_id, t.name);
-                }
-            }
+            assert_eq!(manager.calc_block_subsidy(17 * era_blocks), 0);
+            assert_eq!(manager.calc_block_subsidy(18 * era_blocks), 0);
         }
     }
 

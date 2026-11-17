@@ -304,10 +304,16 @@ async fn main() -> Result<(), anyhow::Error> {
 
         // A mismatched signer would strand reservoir funds, so startup fails closed.
         let faucet_address = config.global.faucet_address.clone();
+        let reserve_address = config.global.faucet_reserve_address.clone();
+        anyhow::ensure!(reserve_address.is_none() || faucet_address.is_some(), "faucet reserve requires faucet_address");
+        let prefix = match faucet_address.as_deref() {
+            Some(address) => celenium_stratum_bridge::faucet_funding::validate_addresses(address, reserve_address.as_deref())?,
+            None => celenium_addresses::Prefix::Mainnet,
+        };
         if let Some(address) = &faucet_address {
             faucet_state.lock().unwrap().set_funding_address(address)?;
         }
-        let faucet_signer = match celenium_stratum_bridge::FaucetSigner::from_env() {
+        let faucet_signer = match celenium_stratum_bridge::FaucetSigner::from_env_for_network(prefix) {
             Ok(signer) => {
                 if let Some(configured) = &faucet_address {
                     signer.ensure_matches(configured).map_err(|e| anyhow::anyhow!("Faucet key/config mismatch: {e}"))?;
@@ -327,6 +333,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 None
             }
         };
+        if let Some(address) = reserve_address {
+            let signer = celenium_stratum_bridge::FaucetSigner::from_reserve_env(prefix)?;
+            signer.ensure_matches(&address)?;
+            prom::set_faucet_reserve_signer(Arc::new(signer), address)?;
+        }
         celenium_stratum_bridge::treasury::set_routes(
             config.global.faucet_bootstrap_address.clone(),
             config.global.faucet_surplus_address.clone(),

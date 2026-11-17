@@ -49,7 +49,7 @@ fn route_coinbase<'a>(
 pub fn coinbase_address(worker: &str, pool: Option<&str>) -> String {
     let status = status();
     let address = crate::prom::faucet_address();
-    let funding = crate::prom::faucet_state_snapshot().and_then(|s| s.lock().unwrap().funding);
+    let funding = crate::prom::faucet_state_snapshot().and_then(|s| s.lock().unwrap().funding_sources.map(|f| f.operational));
     route_coinbase(worker, pool, status.bootstrap_source.as_deref(), address.as_deref(), funding, FaucetState::now_secs()).into()
 }
 
@@ -202,12 +202,13 @@ async fn cycle(
         }
     }
     let Some(source) = source else { return Ok(()) };
-    let funds = api.funding_snapshot(source).await?;
+    let backup = crate::prom::faucet_reserve();
+    let sources = crate::faucet_funding::refresh(api, state, source, backup.as_ref().map(|(address, _)| address.as_str())).await?;
+    let funds = sources.operational;
     let now = FaucetState::now_secs();
     let (outstanding, reserve) = {
-        let mut state = state.lock().unwrap();
+        let state = state.lock().unwrap();
         anyhow::ensure!(!state.storage_uncertain, "faucet ledger requires recovery");
-        state.update_funding(funds.mature_pradha, funds.month, funds.observed_at);
         (state.total_outstanding(), state.service_reserve_pradha())
     };
     let (Some(signer), Some(destination)) = (signer, destination) else { return Ok(()) };
@@ -255,6 +256,31 @@ async fn cycle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reserve_withdrawal_replay_keeps_signed_transaction_and_source() {
+        let pending = PendingTransfer {
+            transaction_json: "signed-transaction-fixture".into(),
+            transaction_id: "same-transaction".into(),
+            amount_pradha: 1000,
+            fee_pradha: 275,
+            source: "reserve".into(),
+            destination: "claimant".into(),
+            network: "simnet".into(),
+            withdrawal: true,
+            anchor: None,
+            input_entries: vec![],
+        };
+        let journal = TreasuryJournal { pending: Some(pending), ..Default::default() };
+        let restored: TreasuryJournal = serde_json::from_slice(&serde_json::to_vec(&journal).unwrap()).unwrap();
+        assert!(!restored.can_prepare());
+        let pending = restored.pending.unwrap();
+        assert_eq!(pending.source, "reserve");
+        assert!(pending.withdrawal);
+        assert_eq!(pending.transaction_json, "signed-transaction-fixture");
+        assert_eq!(pending.transaction_id, "same-transaction");
+        assert_eq!(restored.total_returned_pradha, 0);
+    }
 
     #[test]
     fn only_operator_bootstrap_worker_funds_reservoir() {

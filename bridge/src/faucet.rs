@@ -8,7 +8,7 @@ use std::path::Path;
 pub const FAUCET_MAX_REWARD_PRADHA: u64 = 1_000;
 
 /// Plafon kewajiban klaim faucet: 500.000 CEN.
-pub const FAUCET_MAX_OUTSTANDING_PRADHA: u64 = 50_000_000_000_000;
+pub const FAUCET_MAX_OUTSTANDING_PRADHA: u64 = crate::reservoir_funds::FAUCET_RESERVE_LIMIT_PRADHA;
 
 /// File tempat ledger faucet disimpan (relatif ke working directory bridge).
 pub const FAUCET_LEDGER_PATH: &str = "faucet_ledger.json";
@@ -65,6 +65,8 @@ pub struct FaucetState {
     pub(crate) storage_uncertain: bool,
     #[serde(skip)]
     pub(crate) funding: Option<crate::reservoir_funds::FundingSnapshot>,
+    #[serde(skip)]
+    pub(crate) funding_sources: Option<crate::reservoir_funds::FaucetFundingSnapshot>,
     #[serde(skip)]
     network_prefix: Option<celenium_addresses::Prefix>,
     ledger: HashMap<String, FaucetEntry>,
@@ -496,15 +498,33 @@ impl FaucetState {
     }
 
     pub fn update_funding(&mut self, mature_pradha: u64, month: u64, now: u64) {
-        self.funding = Some(crate::reservoir_funds::FundingSnapshot { mature_pradha, month, observed_at: now });
+        self.update_funding_sources(
+            crate::reservoir_funds::FaucetFundingSnapshot {
+                operational: crate::reservoir_funds::FundingSnapshot { mature_pradha, month, observed_at: now },
+                reserve: None,
+                reserve_configured: false,
+            },
+            now,
+        );
+    }
+
+    pub fn update_funding_sources(&mut self, sources: crate::reservoir_funds::FaucetFundingSnapshot, now: u64) -> bool {
+        let floor = crate::emission_policy::floor_pradha(sources.operational.month);
+        let Some(funding) = sources.combined(now, floor, self.total_outstanding()) else {
+            self.invalidate_funding();
+            return false;
+        };
+        self.funding_sources = Some(sources);
+        self.funding = Some(funding);
         if self.funding_budget_day != now / DAY_SECS || self.funding_daily_cap_pradha == 0 {
             self.funding_daily_cap_pradha = crate::reservoir_funds::cash_daily_cap(
-                mature_pradha,
+                funding.mature_pradha,
                 self.total_outstanding(),
-                crate::emission_policy::daily_cap_pradha(month),
+                crate::emission_policy::daily_cap_pradha(funding.month),
             );
             self.funding_budget_day = now / DAY_SECS;
         }
+        true
     }
 
     pub fn set_funding_address(&mut self, address: &str) -> Result<(), ClaimError> {
@@ -515,6 +535,7 @@ impl FaucetState {
 
     pub fn invalidate_funding(&mut self) {
         self.funding = None;
+        self.funding_sources = None;
     }
 
     pub fn service_reserve_pradha(&self) -> u64 {
@@ -620,6 +641,41 @@ mod tests {
             self.funding_daily_cap_pradha = crate::emission_policy::daily_cap_pradha(0);
             self.claimable_at(address, now)
         }
+    }
+
+    #[test]
+    fn reserve_cash_can_fund_claims_with_an_empty_operational_wallet() {
+        use crate::reservoir_funds::{FaucetFundingSnapshot, FundingSnapshot};
+        let mut state = FaucetState::default();
+        let funds = FaucetFundingSnapshot {
+            operational: FundingSnapshot { mature_pradha: 0, month: 0, observed_at: START },
+            reserve: Some(FundingSnapshot { mature_pradha: FAUCET_MAX_OUTSTANDING_PRADHA, month: 0, observed_at: START }),
+            reserve_configured: true,
+        };
+        assert!(state.update_funding_sources(funds, START));
+        assert_eq!(state.claim_at(ADDR, "", START).unwrap().balance_pradha, 1000);
+        let mut missing = funds;
+        missing.reserve = None;
+        assert!(!state.update_funding_sources(missing, START));
+        assert_eq!(state.claimable_at(ADDR, START), 0);
+        assert_eq!(state.total_outstanding(), 1000);
+    }
+
+    #[test]
+    fn declining_reserve_target_preserves_legacy_claims_without_new_credit() {
+        use crate::reservoir_funds::{FaucetFundingSnapshot, FundingSnapshot, OPERATIONAL_BUFFER_PRADHA};
+        let mut state = FaucetState::default();
+        let legacy = FAUCET_MAX_OUTSTANDING_PRADHA + 1000;
+        state.ledger.insert(ADDR.into(), FaucetEntry { balance_pradha: legacy, ..Default::default() });
+        let funds = FaucetFundingSnapshot {
+            operational: FundingSnapshot { mature_pradha: 0, month: 816, observed_at: START },
+            reserve: Some(FundingSnapshot { mature_pradha: legacy + OPERATIONAL_BUFFER_PRADHA, month: 816, observed_at: START }),
+            reserve_configured: true,
+        };
+        assert!(state.update_funding_sources(funds, START));
+        assert_eq!(state.funding.unwrap().mature_pradha, legacy + OPERATIONAL_BUFFER_PRADHA);
+        assert_eq!(state.total_outstanding(), legacy);
+        assert_eq!(state.claim_at(ADDR, "", START), Err(ClaimError::ReservoirFull));
     }
 
     #[test]

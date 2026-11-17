@@ -302,6 +302,13 @@ fn pay_to_premine_script(script_bytes: &[u8; 35]) -> ScriptPublicKey {
     ScriptPublicKey::from_vec(0, script_bytes.to_vec())
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MiningReserveAllocation {
+    pub floor_script: ScriptPublicKey,
+    pub faucet_script: ScriptPublicKey,
+}
+
 /// The constants uniquely representing the genesis block
 #[derive(Clone, Debug)]
 pub struct GenesisBlock {
@@ -314,14 +321,39 @@ pub struct GenesisBlock {
     pub nonce: u64,
     pub daa_score: u64,
     pub coinbase_payload: &'static [u8],
+    pub mining_reserve: Option<MiningReserveAllocation>,
 }
 
 impl GenesisBlock {
+    pub fn recompute_commitments(&mut self) {
+        use crate::{merkle::calc_hash_merkle_root, muhash::MuHashExtensions, tx::TransactionOutpoint, utxo::UtxoEntry};
+        let transactions = self.build_genesis_transactions();
+        self.hash_merkle_root = calc_hash_merkle_root(transactions.iter());
+        let mut multiset = celenium_muhash::MuHash::new();
+        for tx in &transactions {
+            for (index, output) in tx.outputs.iter().enumerate() {
+                let entry = UtxoEntry {
+                    amount: output.value, script_public_key: output.script_public_key.clone(),
+                    block_daa_score: 0, is_coinbase: false, covenant_id: None,
+                };
+                multiset.add_utxo(&TransactionOutpoint::new(tx.id(), index as u32), &entry);
+            }
+        }
+        self.utxo_commitment = multiset.finalize();
+        self.hash = Header::from(&*self).hash;
+    }
+
     pub fn build_genesis_transactions(&self) -> Vec<Transaction> {
+        let mut outputs: Vec<TransactionOutput> =
+            PREMINE_OUTPUTS.iter().map(|(amount, script)| TransactionOutput::new(*amount, pay_to_premine_script(script))).collect();
+        if let Some(allocation) = &self.mining_reserve {
+            outputs.push(TransactionOutput::new(super::mining_reserve::GENERAL_RESERVE, allocation.floor_script.clone()));
+            outputs.push(TransactionOutput::new(super::mining_reserve::FAUCET_RESERVE, allocation.faucet_script.clone()));
+        }
         vec![Transaction::new(
             0,
             Vec::new(),
-            PREMINE_OUTPUTS.iter().map(|(amount, script)| TransactionOutput::new(*amount, pay_to_premine_script(script))).collect(),
+            outputs,
             0,
             SUBNETWORK_ID_COINBASE,
             0,
@@ -367,12 +399,14 @@ impl From<(&Header, &'static [u8])> for GenesisBlock {
             nonce: header.nonce,
             daa_score: header.daa_score,
             coinbase_payload: payload,
+            mining_reserve: None,
         }
     }
 }
 
 /// The genesis block of the block-DAG which serves as the public transaction ledger for the main network.
 pub const GENESIS: GenesisBlock = GenesisBlock {
+    mining_reserve: None,
     hash: Hash::from_bytes([
         0xc7, 0xad, 0x53, 0xd3, 0xf1, 0x42, 0x76, 0x30, 0x9a, 0x5e, 0x8c, 0x1b, 0x3a, 0xf0, 0x14, 0x9b, 0x90, 0xd9, 0x8e, 0xe0, 0xac,
         0xe7, 0x51, 0xd9, 0xff, 0xd6, 0xf2, 0xf0, 0xb3, 0x48, 0x08, 0x87,
@@ -402,6 +436,7 @@ pub const GENESIS: GenesisBlock = GenesisBlock {
 };
 
 pub const TESTNET_GENESIS: GenesisBlock = GenesisBlock {
+    mining_reserve: None,
     hash: Hash::from_bytes([
         0x91, 0x6e, 0x32, 0x44, 0x91, 0x17, 0xac, 0x75, 0x90, 0x2f, 0x86, 0x8c, 0x3a, 0x4f, 0xcf, 0x32, 0xcc, 0x22, 0xc6, 0x1f, 0xfc,
         0xc8, 0xcc, 0x9b, 0xf7, 0x8b, 0x9a, 0xf7, 0xce, 0x0b, 0x7b, 0x2c,
@@ -430,6 +465,7 @@ pub const TESTNET_GENESIS: GenesisBlock = GenesisBlock {
 };
 
 pub const SIMNET_GENESIS: GenesisBlock = GenesisBlock {
+    mining_reserve: None,
     hash: Hash::from_bytes([
         0x6e, 0x1e, 0x13, 0x1e, 0xd1, 0x4b, 0x27, 0x21, 0xe0, 0x7a, 0x16, 0xe5, 0xfd, 0x49, 0xfc, 0xfa, 0x86, 0xa3, 0x5c, 0x95, 0x11,
         0xeb, 0x95, 0x54, 0x6a, 0x90, 0x65, 0x83, 0x74, 0x23, 0x3e, 0xda,
@@ -458,6 +494,7 @@ pub const SIMNET_GENESIS: GenesisBlock = GenesisBlock {
 };
 
 pub const DEVNET_GENESIS: GenesisBlock = GenesisBlock {
+    mining_reserve: None,
     hash: Hash::from_bytes([
         0xb7, 0x7f, 0x7c, 0x31, 0xcb, 0x97, 0x01, 0xfa, 0x3b, 0x3d, 0x7f, 0x62, 0xe9, 0x45, 0xfb, 0xad, 0x26, 0xe0, 0xa9, 0xb9, 0x14,
         0xb8, 0x1f, 0xf2, 0x40, 0xd1, 0xfb, 0x05, 0x60, 0xc9, 0x00, 0x6f,
@@ -494,6 +531,31 @@ mod tests {
     use crate::tx::TransactionOutpoint;
     use crate::utxo::UtxoEntry;
     use celenium_muhash::MuHash;
+
+    #[test]
+    fn reserve_allocation_creates_real_outputs_and_changes_chain_identity() {
+        let baseline = SIMNET_GENESIS.clone();
+        let mut funded = baseline.clone();
+        let floor_script = ScriptPublicKey::from_vec(0, [vec![0x20], vec![1; 32], vec![0xac]].concat());
+        let faucet_script = ScriptPublicKey::from_vec(0, [vec![0x20], vec![2; 32], vec![0xac]].concat());
+        funded.mining_reserve = Some(MiningReserveAllocation { floor_script: floor_script.clone(), faucet_script: faucet_script.clone() });
+        funded.recompute_commitments();
+        let transactions = funded.build_genesis_transactions();
+        let outputs = &transactions[0].outputs;
+        assert_eq!(outputs.len(), PREMINE_OUTPUTS.len() + 2);
+        assert_eq!(outputs[PREMINE_OUTPUTS.len()].value, super::super::mining_reserve::GENERAL_RESERVE);
+        assert_eq!(outputs[PREMINE_OUTPUTS.len()].script_public_key, floor_script);
+        assert_eq!(outputs[PREMINE_OUTPUTS.len() + 1].value, super::super::mining_reserve::FAUCET_RESERVE);
+        assert_eq!(outputs[PREMINE_OUTPUTS.len() + 1].script_public_key, faucet_script);
+        assert_eq!(outputs.iter().map(|o| o.value).sum::<u64>(), 19_000_000 * 100_000_000);
+        assert_eq!(&outputs[..PREMINE_OUTPUTS.len()], baseline.build_genesis_transactions()[0].outputs.as_slice());
+        assert_ne!(funded.hash, baseline.hash);
+        assert_ne!(funded.utxo_commitment, baseline.utxo_commitment);
+        assert_eq!(calc_hash_merkle_root(transactions.iter()), funded.hash_merkle_root);
+        let first_hash = funded.hash;
+        funded.recompute_commitments();
+        assert_eq!(funded.hash, first_hash);
+    }
 
     #[test]
     fn test_genesis_hashes() {

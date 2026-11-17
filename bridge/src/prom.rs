@@ -454,6 +454,18 @@ static FAUCET_SIGNER: OnceLock<Option<std::sync::Arc<crate::faucet_signer::Fauce
 /// The `cen69:` address the faucet pays from, mirrored from config so the
 /// withdraw route can report it without touching the parsed config.
 static FAUCET_PAYOUT_ADDRESS: OnceLock<Option<String>> = OnceLock::new();
+static FAUCET_RESERVE: OnceLock<(String, std::sync::Arc<crate::faucet_signer::FaucetSigner>)> = OnceLock::new();
+
+pub fn faucet_reserve() -> Option<(String, std::sync::Arc<crate::faucet_signer::FaucetSigner>)> {
+    FAUCET_RESERVE.get().cloned()
+}
+
+pub fn set_faucet_reserve_signer(signer: std::sync::Arc<crate::faucet_signer::FaucetSigner>, address: String) -> anyhow::Result<()> {
+    let operational = faucet_address().ok_or_else(|| anyhow::anyhow!("reserve requires an operational faucet address"))?;
+    crate::faucet_funding::validate_addresses(&operational, Some(&address))?;
+    signer.ensure_matches(&address)?;
+    FAUCET_RESERVE.set((address, signer)).map_err(|_| anyhow::anyhow!("faucet reserve already configured"))
+}
 
 pub fn faucet_address() -> Option<String> {
     FAUCET_PAYOUT_ADDRESS.get().cloned().flatten()
@@ -466,22 +478,12 @@ pub(crate) static FAUCET_WITHDRAW_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mu
 
 async fn refresh_faucet_funding() {
     let Some(state) = FAUCET_STATE.get() else { return };
-    let journal = crate::treasury::TreasuryJournal::load(std::path::Path::new(crate::treasury::TREASURY_JOURNAL_PATH));
-    if journal.as_ref().is_err() || journal.as_ref().is_ok_and(|j| !j.can_prepare()) {
-        state.lock().unwrap().invalidate_funding();
-        return;
-    }
-    let result = match (NODE_API.get(), FAUCET_PAYOUT_ADDRESS.get().and_then(|a| a.as_deref())) {
-        (Some(api), Some(address)) => tokio::time::timeout(std::time::Duration::from_secs(10), api.funding_snapshot(address)).await,
-        _ => {
-            state.lock().unwrap().invalidate_funding();
-            return;
+    state.lock().unwrap().invalidate_funding();
+    if let (Some(api), Some(address)) = (NODE_API.get(), FAUCET_PAYOUT_ADDRESS.get().and_then(|a| a.as_deref())) {
+        let reserve = FAUCET_RESERVE.get().map(|(address, _)| address.as_str());
+        if let Err(error) = crate::faucet_funding::refresh(api, state, address, reserve).await {
+            tracing::warn!("faucet funding unavailable: {error:#}");
         }
-    };
-    let mut state = state.lock().unwrap();
-    match result {
-        Ok(Ok(funds)) => state.update_funding(funds.mature_pradha, funds.month, funds.observed_at),
-        _ => state.invalidate_funding(),
     }
 }
 
@@ -570,25 +572,20 @@ async fn withdraw_response(body: &str) -> String {
         Err(e) => return serde_json::json!({ "error": format!("invalid json: {e}") }).to_string(),
     };
 
-    let address = v.get("address").and_then(|x| x.as_str()).unwrap_or("").trim().to_string();
+    let address = v.get("address").and_then(|x| x.as_str()).unwrap_or("").to_string();
     if address.is_empty() {
         return serde_json::json!({ "error": "missing address" }).to_string();
     }
-    if celenium_addresses::Address::try_from(address.as_str()).is_err() {
+    if crate::faucet::FaucetState::validate_address(&address).is_err() {
         return serde_json::json!({ "error": "address is not a valid Celenium address" }).to_string();
     }
 
-    let signer = match FAUCET_SIGNER.get().and_then(|s| s.as_ref()) {
-        Some(s) => s.clone(),
-        None => {
-            return serde_json::json!({
-                "error": "faucet withdrawals are not configured",
-                "detail": "set CELENIUM_FAUCET_PRIVKEY or CELENIUM_FAUCET_KEYFILE on the bridge and restart"
-            })
-            .to_string();
-        }
-    };
-    let payout_address = match FAUCET_PAYOUT_ADDRESS.get().and_then(|a| a.clone()) {
+    let signer = FAUCET_SIGNER.get().and_then(|s| s.as_deref());
+    let reserve = FAUCET_RESERVE.get().map(|(address, signer)| (address.as_str(), signer.as_ref()));
+    if signer.is_none() && reserve.is_none() {
+        return serde_json::json!({"error": "faucet withdrawals are not configured"}).to_string();
+    }
+    let operational_address = match FAUCET_PAYOUT_ADDRESS.get().and_then(|a| a.clone()) {
         Some(a) if !a.trim().is_empty() => a,
         _ => {
             return serde_json::json!({
@@ -598,10 +595,6 @@ async fn withdraw_response(body: &str) -> String {
             .to_string();
         }
     };
-    if let Err(e) = signer.ensure_matches(&payout_address) {
-        tracing::error!("faucet payout address does not match the configured key: {e}");
-        return serde_json::json!({ "error": e.to_string() }).to_string();
-    }
 
     let state = match FAUCET_STATE.get() {
         Some(s) => s,
@@ -658,43 +651,27 @@ async fn withdraw_response(body: &str) -> String {
         None => return serde_json::json!({ "error": "node api not ready" }).to_string(),
     };
 
-    let reservoir_balance = match api.funding_snapshot(&payout_address).await {
-        Ok(funds) => funds.mature_pradha,
-        Err(e) => {
-            tracing::warn!("faucet balance query failed: {e:#}");
-            return serde_json::json!({"error": "cannot read the faucet balance; retry later", "errorCode": "NodeUnavailable"})
-                .to_string();
-        }
-    };
-    if reservoir_balance <= amount {
-        return serde_json::json!({
-            "error": "faucet has no on-chain funds yet",
-            "errorCode": "ReservoirUnfunded",
-            "balancePradha": balance,
-            "faucetOnChainPradha": reservoir_balance,
-        })
-        .to_string();
-    }
-    let prepared = match api.prepare_transfer(&payout_address, &address, amount, signer.secret_hex()).await {
-        Ok(prepared) => prepared,
-        Err(e) => {
-            tracing::warn!("faucet transfer preparation failed: {e:#}");
-            let message = format!("{e:#}");
-            let code =
-                if message.contains("SmallTransferNotSupported") { "SmallTransferNotSupported" } else { "TransferPreparationFailed" };
-            return serde_json::json!({ "error": message, "errorCode": code, "balancePradha": balance }).to_string();
-        }
+    let (source, prepared) =
+        match crate::faucet_funding::prepare_withdrawal(api, state, &operational_address, signer, reserve, &address, amount, None)
+            .await
+        {
+            Ok(prepared) => prepared,
+            Err(e) => {
+                tracing::warn!("faucet transfer preparation failed: {e:#}");
+                let message = format!("{e:#}");
+                let code = if message.contains("SmallTransferNotSupported") {
+                    "SmallTransferNotSupported"
+                } else {
+                    "TransferPreparationFailed"
+                };
+                return serde_json::json!({ "error": message, "errorCode": code, "balancePradha": balance }).to_string();
+            }
+        };
+    let payout_address = match source {
+        crate::reservoir_funds::PayoutSource::Operational => operational_address,
+        crate::reservoir_funds::PayoutSource::Reserve => reserve.unwrap().0.to_string(),
     };
     let fee = prepared.fee_pradha();
-    {
-        let state = state.lock().unwrap();
-        if reservoir_balance.saturating_sub(amount).saturating_sub(fee) < state.total_outstanding().saturating_sub(amount) {
-            return serde_json::json!({"error":"reservoir cannot cover existing claims and this transfer fee", "errorCode":"InsufficientBacking"}).to_string();
-        }
-        if let Err(e) = state.check_withdraw_fee(&address, fee) {
-            return serde_json::json!({ "error": e.to_string(), "balancePradha": balance }).to_string();
-        }
-    }
     journal.pending = Some(crate::treasury::PendingTransfer {
         transaction_json: match prepared.transaction_json() {
             Ok(s) => s,
@@ -761,6 +738,7 @@ async fn withdraw_response(body: &str) -> String {
         "txid": txid,
         "amountPradha": amount,
         "feePradha": fee,
+        "sourceAddress": payout_address,
         "balancePradha": remaining,
     })
     .to_string()
@@ -895,6 +873,7 @@ async fn handle_http_request(
                 let outstanding_cap = s.outstanding_cap_now();
                 let now = crate::faucet::FaucetState::now_secs();
                 let funding = s.funding.filter(|f| f.is_fresh(now));
+                let sources = s.funding_sources.filter(|_| funding.is_some());
                 let floor = funding.map(|f| crate::emission_policy::floor_pradha(f.month));
                 serde_json::json!({
                     "fundingModel": "mature-cash-backed",
@@ -905,7 +884,11 @@ async fn handle_http_request(
                     "claimsRequireActiveMiners": false,
                     "emissionMonth": funding.map(|f| f.month),
                     "emissionClock": "node-virtual-daa",
-                    "matureReservoirPradha": funding.map(|f| f.mature_pradha),
+                    "matureReservoirPradha": sources.map(|f| f.operational.mature_pradha),
+                    "matureReservePradha": sources.and_then(|f| f.reserve.map(|r| r.mature_pradha)),
+                    "reserveTargetPradha": floor.map(crate::reservoir_funds::reserve_target_pradha),
+                    "eligibleReservePradha": funding.zip(sources).map(|(f, s)| f.mature_pradha.saturating_sub(s.operational.mature_pradha)),
+                    "combinedEligibleFundingPradha": funding.map(|f| f.mature_pradha),
                     "fundingVerified": funding.is_some(),
                     "freeFundsPradha": funding.map(|f| crate::reservoir_funds::available_for_claims(f.mature_pradha, outstanding)),
                     "operationalBufferPradha": crate::reservoir_funds::OPERATIONAL_BUFFER_PRADHA,
@@ -931,7 +914,8 @@ async fn handle_http_request(
                     "dailyFeeBudgetPradha": crate::faucet::FAUCET_DAILY_FEE_BUDGET_PRADHA,
                     "feesTodayPradha": s.fees_today(),
                     "faucetAddress": FAUCET_PAYOUT_ADDRESS.get().and_then(|a| a.clone()),
-                    "withdrawalsEnabled": FAUCET_SIGNER.get().and_then(|s| s.as_ref()).is_some(),
+                    "faucetReserveAddress": FAUCET_RESERVE.get().map(|(address, _)| address),
+                    "withdrawalsEnabled": FAUCET_SIGNER.get().and_then(|s| s.as_ref()).is_some() || FAUCET_RESERVE.get().is_some(),
                 })
                 .to_string()
             }
@@ -2378,7 +2362,7 @@ mod tests {
             0,
             crate::faucet::FaucetState::now_secs(),
         );
-        set_faucet_state(state);
+        set_faucet_state(std::sync::Arc::clone(&state));
         let mode = HttpMode::Aggregated { web_bind: "127.0.0.1:0".to_string() };
         let request =
             "GET /api/faucet/balance?address=cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6 HTTP/1.1\r\n\r\n";
@@ -2402,6 +2386,26 @@ mod tests {
         let status: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
         assert_eq!(status["faucetOutstandingLimitPradha"], 50_000_000_000_000_u64);
         assert_eq!(status["claimsRequireActiveMiners"], false);
+        let now = crate::faucet::FaucetState::now_secs();
+        state.lock().unwrap().update_funding_sources(
+            crate::reservoir_funds::FaucetFundingSnapshot {
+                operational: crate::reservoir_funds::FundingSnapshot { mature_pradha: 0, month: 0, observed_at: now },
+                reserve: Some(crate::reservoir_funds::FundingSnapshot {
+                    mature_pradha: 50_000_000_000_000,
+                    month: 0,
+                    observed_at: now,
+                }),
+                reserve_configured: true,
+            },
+            now,
+        );
+        let response = send_request(mode.clone(), "GET /api/faucet/status HTTP/1.1\r\n\r\n").await;
+        let status: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(status["matureReservoirPradha"], 0);
+        assert_eq!(status["matureReservePradha"], 50_000_000_000_000_u64);
+        assert_eq!(status["reserveTargetPradha"], 50_000_000_000_000_u64);
+        assert_eq!(status["combinedEligibleFundingPradha"], 50_000_000_000_000_u64);
+        assert_eq!(status["rewardPradha"], 1000);
         let response = send_request(mode, "POST /api/faucet/claim HTTP/1.1").await;
         assert!(response.contains("error"));
     }

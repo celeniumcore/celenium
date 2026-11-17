@@ -5,6 +5,7 @@ pub mod default_client;
 pub mod emission_policy;
 pub mod errors;
 pub mod faucet;
+pub mod faucet_funding;
 pub mod faucet_signer;
 pub mod hasher;
 pub mod jsonrpc_event;

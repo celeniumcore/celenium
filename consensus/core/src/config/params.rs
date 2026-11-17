@@ -254,6 +254,7 @@ pub struct OverrideParams {
     pub deflationary_phase_daa_score: Option<u64>,
 
     pub pre_deflationary_phase_base_subsidy: Option<u64>,
+    pub mining_reserve: Option<super::genesis::MiningReserveAllocation>,
     pub skip_proof_of_work: Option<bool>,
     pub max_block_level: Option<BlockLevel>,
     pub pruning_proof_m: Option<u64>,
@@ -291,6 +292,7 @@ impl From<Params> for OverrideParams {
             storage_mass_amount_floor: Some(p.storage_mass_amount_floor),
             deflationary_phase_daa_score: Some(p.deflationary_phase_daa_score),
             pre_deflationary_phase_base_subsidy: Some(p.pre_deflationary_phase_base_subsidy),
+            mining_reserve: p.genesis.mining_reserve.clone(),
             skip_proof_of_work: Some(p.skip_proof_of_work),
             max_block_level: Some(p.max_block_level),
             pruning_proof_m: Some(p.pruning_proof_m),
@@ -493,10 +495,22 @@ impl Params {
     }
 
     pub fn override_params(self, overrides: OverrideParams) -> Self {
+        let mut genesis = self.genesis.clone();
+        if let Some(allocation) = &overrides.mining_reserve {
+            assert_eq!(self.net.network_type, NetworkType::Simnet, "mining reserve requires a separately activated chain; only simnet override is enabled");
+            let effective = overrides.blockrate.as_ref().unwrap_or(&self.blockrate);
+            assert_eq!(effective.target_time_per_block, 100, "mining reserve schedule requires 10 BPS");
+            assert_eq!(overrides.pre_crescendo_target_time_per_block.unwrap_or(self.pre_crescendo_target_time_per_block), 100);
+            assert_eq!(overrides.deflationary_phase_daa_score.unwrap_or(self.deflationary_phase_daa_score), 0);
+            assert!(!allocation.floor_script.script().is_empty() && !allocation.faucet_script.script().is_empty(), "reserve scripts must not be empty");
+            assert_ne!(allocation.floor_script, allocation.faucet_script, "reserve destinations must differ");
+            genesis.mining_reserve = Some(allocation.clone());
+            genesis.recompute_commitments();
+        }
         Self {
             dns_seeders: self.dns_seeders,
             net: self.net,
-            genesis: self.genesis.clone(),
+            genesis,
 
             timestamp_deviation_tolerance: overrides.timestamp_deviation_tolerance.unwrap_or(self.timestamp_deviation_tolerance),
 
@@ -776,6 +790,56 @@ pub const DEVNET_PARAMS: Params = Params {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn reserve_overrides() -> OverrideParams {
+        let mut value: OverrideParams = serde_json::from_str("{}").unwrap();
+        value.mining_reserve = Some(super::super::genesis::MiningReserveAllocation {
+            floor_script: crate::tx::ScriptPublicKey::from_vec(0, [alloc::vec![0x20], alloc::vec![1; 32], alloc::vec![0xac]].concat()),
+            faucet_script: crate::tx::ScriptPublicKey::from_vec(0, [alloc::vec![0x20], alloc::vec![2; 32], alloc::vec![0xac]].concat()),
+        });
+        value
+    }
+
+    #[test]
+    fn reserve_overrides_change_only_opted_in_simnet() {
+        for params in [MAINNET_PARAMS, TESTNET_PARAMS, DEVNET_PARAMS, SIMNET_PARAMS] {
+            let hash = params.genesis.hash;
+            let same = params.override_params(serde_json::from_str("{}").unwrap());
+            assert_eq!(same.genesis.hash, hash);
+            assert!(same.genesis.mining_reserve.is_none());
+        }
+        let modified = SIMNET_PARAMS.override_params(reserve_overrides());
+        assert_ne!(modified.genesis.hash, SIMNET_GENESIS.hash);
+        let overrides = OverrideParams::from(modified.clone());
+        let encoded = serde_json::to_string(&overrides).unwrap();
+        let restored = SIMNET_PARAMS.override_params(serde_json::from_str(&encoded).unwrap());
+        assert_eq!(restored.genesis.hash, modified.genesis.hash);
+    }
+
+    #[test]
+    #[should_panic(expected = "only simnet override is enabled")]
+    fn reserve_overrides_cannot_reset_mainnet() {
+        MAINNET_PARAMS.override_params(reserve_overrides());
+    }
+
+    #[test]
+    #[should_panic(expected = "reserve destinations must differ")]
+    fn reserve_overrides_reject_duplicate_destinations() {
+        let mut overrides = reserve_overrides();
+        let allocation = overrides.mining_reserve.as_mut().unwrap();
+        allocation.floor_script = allocation.faucet_script.clone();
+        SIMNET_PARAMS.override_params(overrides);
+    }
+
+    #[test]
+    #[should_panic(expected = "requires 10 BPS")]
+    fn reserve_overrides_reject_changed_blockrate() {
+        let mut overrides = reserve_overrides();
+        let mut blockrate = SIMNET_PARAMS.blockrate;
+        blockrate.target_time_per_block = 200;
+        overrides.blockrate = Some(blockrate);
+        SIMNET_PARAMS.override_params(overrides);
+    }
 
     #[test]
     fn storage_floor_overrides_are_optional_and_round_trip() {
