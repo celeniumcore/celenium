@@ -18,6 +18,7 @@ pub(crate) const FALLBACK_FEERATE: f64 = 0.25;
 pub struct PreparedTransfer {
     pub(crate) transaction: celenium_rpc_core::RpcTransaction,
     pub(crate) network_id: celenium_consensus_core::network::NetworkId,
+    input_entries: Vec<celenium_rpc_core::RpcUtxoEntry>,
     fee_pradha: u64,
     transaction_id: String,
 }
@@ -30,7 +31,22 @@ impl PreparedTransfer {
         let outputs =
             signed.tx.outputs.iter().try_fold(0u64, |sum, output| sum.checked_add(output.value).context("output total overflows"))?;
         let fee_pradha = inputs.checked_sub(outputs).context("outputs exceed inputs")?;
-        Ok(Self { transaction: (&signed.tx).into(), network_id: params.net, fee_pradha, transaction_id: signed.tx.id().to_string() })
+        let input_entries = signed
+            .entries
+            .iter()
+            .map(|entry| entry.as_ref().context("missing input entry").map(|entry| entry.clone().into()))
+            .collect::<Result<Vec<celenium_rpc_core::RpcUtxoEntry>>>()?;
+        Ok(Self {
+            transaction: (&signed.tx).into(),
+            network_id: params.net,
+            input_entries,
+            fee_pradha,
+            transaction_id: signed.tx.id().to_string(),
+        })
+    }
+
+    pub fn input_entries(&self) -> Vec<celenium_rpc_core::RpcUtxoEntry> {
+        self.input_entries.clone()
     }
 
     pub fn fee_pradha(&self) -> u64 {
@@ -183,6 +199,99 @@ pub(crate) fn build_transfer(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_surplus_transfer(
+    params: &Params,
+    daa_score: u64,
+    source: &Address,
+    destination: &Address,
+    max_amount: u64,
+    feerate: f64,
+    secret: &[u8; 32],
+    utxos: Vec<(TransactionOutpoint, UtxoEntry)>,
+) -> Result<SignableTransaction> {
+    ensure!(max_amount > 0, "surplus amount must be positive");
+    validate_request(params, source, destination, 1, secret)?;
+    fee_for_mass(0, feerate)?;
+    let max_inputs = MAX_TRANSFER_INPUTS.min(params.max_tx_inputs);
+    ensure!(max_inputs > 0, "transfer input limit must be positive");
+
+    let source_script = pay_to_address_script(source);
+    let mut eligible = utxos
+        .into_iter()
+        .filter(|(_, entry)| {
+            entry.script_public_key == source_script
+                && entry.amount > 0
+                && entry.covenant_id.is_none()
+                && (!entry.is_coinbase
+                    || entry.block_daa_score.checked_add(params.coinbase_maturity()).is_some_and(|mature| mature <= daa_score))
+        })
+        .collect::<Vec<_>>();
+    eligible.sort_by(|left, right| right.1.amount.cmp(&left.1.amount));
+    ensure!(!eligible.is_empty(), "InsufficientFunds: no eligible surplus UTXOs");
+
+    let mut prefix_totals = Vec::with_capacity(eligible.len());
+    let mut total = 0u64;
+    for (_, entry) in &eligible {
+        total = total.checked_add(entry.amount).context("surplus input total overflows")?;
+        prefix_totals.push(total);
+    }
+
+    let mut batch_len = eligible.len().min(max_inputs);
+    let mut last_mass_error = None;
+    while batch_len > 0 {
+        let batch = &eligible[..batch_len];
+        let batch_total = prefix_totals[batch_len - 1];
+        let conservative_fee = surplus_fee_upper_bound(params, source, destination, feerate, batch)?;
+        let amount = max_amount.min(batch_total.saturating_sub(conservative_fee));
+        if amount == 0 {
+            bail!("InsufficientFunds: eligible surplus does not cover its transaction fee");
+        }
+        match build_transfer(params, daa_score, source, destination, amount, None, feerate, secret, batch.to_vec()) {
+            Ok(signed) => return Ok(signed),
+            Err(error) if is_mass_limit_error(&error) => {
+                last_mass_error = Some(error);
+                if batch_len == 1 {
+                    break;
+                }
+                batch_len = (batch_len / 2).max(1);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if let Some(error) = last_mass_error {
+        return Err(error.context("surplus transfer cannot fit the mass limits"));
+    }
+    bail!("InsufficientFunds: no eligible surplus batch can fund a transfer")
+}
+
+fn surplus_fee_upper_bound(
+    params: &Params,
+    source: &Address,
+    destination: &Address,
+    feerate: f64,
+    batch: &[(TransactionOutpoint, UtxoEntry)],
+) -> Result<u64> {
+    let tx = Transaction::new(
+        TX_VERSION,
+        batch.iter().map(|(outpoint, _)| TransactionInput::new(*outpoint, vec![0; 66], MAX_TX_IN_SEQUENCE_NUM, 1)).collect(),
+        vec![TransactionOutput::new(1, pay_to_address_script(destination)), TransactionOutput::new(1, pay_to_address_script(source))],
+        0,
+        SUBNETWORK_ID_NATIVE,
+        0,
+        vec![],
+    );
+    let mass = MassCalculator::new_with_consensus_params(params)
+        .calc_non_contextual_masses(&tx)
+        .normalized_max(&params.block_mass_cofactors());
+    fee_for_mass(mass, feerate)
+}
+
+fn is_mass_limit_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("exceeds non-contextual mass limits") || message.contains("SmallTransferNotSupported")
+}
+
 pub(crate) fn validate_request(
     params: &Params,
     source: &Address,
@@ -232,6 +341,104 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    #[test]
+    fn surplus_batches_bootstrap_inputs_and_can_sweep_again() {
+        let (source, secret) = wallet(1);
+        let (dest, _) = wallet(2);
+        let mut remaining = inputs(&source, &[2_079_547; 200]);
+        let mut maximum = 400_000_000;
+        for _ in 0..2 {
+            let signed = build_surplus_transfer(&SIMNET_PARAMS, 1, &source, &dest, maximum, 0.25, &secret, remaining.clone()).unwrap();
+            assert!(!signed.tx.inputs.is_empty());
+            assert!(signed.tx.inputs.len() <= MAX_TRANSFER_INPUTS.min(SIMNET_PARAMS.max_tx_inputs));
+            let amount = signed.tx.outputs[0].value;
+            let total: u64 = signed.entries.iter().map(|entry| entry.as_ref().unwrap().amount).sum();
+            let paid = total - signed.tx.outputs.iter().map(|output| output.value).sum::<u64>();
+            let calculator = MassCalculator::new_with_consensus_params(&SIMNET_PARAMS);
+            let mass = calculator.calc_non_contextual_masses(&signed.tx);
+            assert!(amount > 0 && amount <= maximum && amount < total);
+            assert!(paid >= fee_for_mass(mass.normalized_max(&SIMNET_PARAMS.block_mass_cofactors()), 0.25).unwrap());
+            assert!(mass.compute_mass <= SIMNET_PARAMS.block_mass_limits.compute);
+            assert!(mass.transient_mass <= SIMNET_PARAMS.block_mass_limits.transient);
+            assert!(
+                calculator.calc_contextual_masses(&signed.as_verifiable()).unwrap().storage_mass
+                    <= SIMNET_PARAMS.block_mass_limits.storage
+            );
+            sign::verify(&signed.as_verifiable()).unwrap();
+            remaining.retain(|(outpoint, _)| !signed.tx.inputs.iter().any(|input| input.previous_outpoint == *outpoint));
+            for (index, output) in signed.tx.outputs.iter().enumerate().skip(1) {
+                remaining.push((
+                    TransactionOutpoint::new(signed.tx.id(), index as u32),
+                    UtxoEntry::new(output.value, output.script_public_key.clone(), 1, false, None),
+                ));
+            }
+            let quote = PreparedTransfer::new(signed, &SIMNET_PARAMS).unwrap();
+            assert!(!quote.input_entries().is_empty());
+            maximum -= amount;
+        }
+    }
+
+    #[test]
+    fn surplus_prefers_large_change_and_respects_network_input_limit() {
+        let (source, secret) = wallet(1);
+        let (dest, _) = wallet(2);
+        let mut params = SIMNET_PARAMS;
+        params.max_tx_inputs = 1;
+        let mut utxos = inputs(&source, &[2_079_547; 200]);
+        let change = TransactionOutpoint::new(celenium_hashes::Hash::from_u64_word(201), 0);
+        utxos.push((change, UtxoEntry::new(300_000_000, pay_to_address_script(&source), 1, false, None)));
+        let signed = build_surplus_transfer(&params, 1, &source, &dest, 100_000_000, 0.25, &secret, utxos).unwrap();
+        assert_eq!(signed.tx.inputs.len(), 1);
+        assert_eq!(signed.tx.inputs[0].previous_outpoint, change);
+        assert_eq!(signed.tx.outputs[0].value, 100_000_000);
+        assert_eq!(signed.tx.outputs[1].script_public_key, pay_to_address_script(&source));
+    }
+
+    #[test]
+    fn surplus_reduces_batches_that_exceed_compute_mass() {
+        let (source, secret) = wallet(1);
+        let (dest, _) = wallet(2);
+        let mut params = SIMNET_PARAMS;
+        params.block_mass_limits.compute = 5_000;
+        let signed =
+            build_surplus_transfer(&params, 1, &source, &dest, 400_000_000, 0.25, &secret, inputs(&source, &[2_079_547; 200]))
+                .unwrap();
+        assert!(signed.tx.inputs.len() < MAX_TRANSFER_INPUTS);
+        assert!(
+            MassCalculator::new_with_consensus_params(&params).calc_non_contextual_masses(&signed.tx).compute_mass
+                <= params.block_mass_limits.compute
+        );
+    }
+
+    #[test]
+    fn surplus_rejects_unspendable_inputs_and_invalid_limits_without_panicking() {
+        let (source, secret) = wallet(1);
+        let (dest, _) = wallet(2);
+        let mut params = SIMNET_PARAMS;
+        params.blockrate.coinbase_maturity = 10;
+        let mut utxos = inputs(&source, &[200_000_000; 4]);
+        utxos[1].1.block_daa_score = u64::MAX;
+        utxos[2].1.covenant_id = Some(Default::default());
+        utxos[3].1.script_public_key = pay_to_address_script(&dest);
+        assert!(build_surplus_transfer(&params, 10, &source, &dest, 100_000_000, 0.25, &secret, utxos).is_err());
+        for (maximum, rate, amounts) in [
+            (0, 0.25, vec![200_000_000]),
+            (100_000_000, f64::NAN, vec![200_000_000]),
+            (100_000_000, 0.25, vec![1]),
+            (100_000_000, 0.25, vec![]),
+            (100_000_000, f64::MAX, vec![200_000_000]),
+            (100_000_000, 0.25, vec![u64::MAX; 2]),
+        ] {
+            assert!(
+                build_surplus_transfer(&SIMNET_PARAMS, 1, &source, &dest, maximum, rate, &secret, inputs(&source, &amounts)).is_err()
+            );
+        }
+        params.max_tx_inputs = 0;
+        assert!(
+            build_surplus_transfer(&params, 11, &source, &dest, 100_000_000, 0.25, &secret, inputs(&source, &[200_000_000])).is_err()
+        );
     }
 
     #[test]

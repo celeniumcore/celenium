@@ -300,14 +300,14 @@ async fn main() -> Result<(), anyhow::Error> {
             celenium_stratum_bridge::FaucetState::load(std::path::Path::new(celenium_stratum_bridge::FAUCET_LEDGER_PATH))
                 .map_err(|e| anyhow::anyhow!("Cannot load faucet ledger; refusing to start with empty balances: {e}"))?,
         ));
-        prom::set_faucet_state(faucet_state);
+        prom::set_faucet_state(Arc::clone(&faucet_state));
 
-        // Operator-side signing key for on-chain payouts. Missing key is not
-        // fatal: claims keep working off-chain, only withdraw reports that it is
-        // unconfigured. A key that does not match `faucet_address` IS fatal,
-        // because paying from the wrong address would strand user funds.
+        // A mismatched signer would strand reservoir funds, so startup fails closed.
         let faucet_address = config.global.faucet_address.clone();
-        match celenium_stratum_bridge::FaucetSigner::from_env() {
+        if let Some(address) = &faucet_address {
+            faucet_state.lock().unwrap().set_funding_address(address)?;
+        }
+        let faucet_signer = match celenium_stratum_bridge::FaucetSigner::from_env() {
             Ok(signer) => {
                 if let Some(configured) = &faucet_address {
                     signer.ensure_matches(configured).map_err(|e| anyhow::anyhow!("Faucet key/config mismatch: {e}"))?;
@@ -317,13 +317,28 @@ async fn main() -> Result<(), anyhow::Error> {
                     );
                 }
                 tracing::info!("Faucet payouts enabled from {}", signer.address());
-                prom::set_faucet_signer(Some(std::sync::Arc::new(signer)), faucet_address);
+                let signer = Arc::new(signer);
+                prom::set_faucet_signer(Some(Arc::clone(&signer)), faucet_address.clone());
+                Some(signer)
             }
             Err(e) => {
                 tracing::warn!("Faucet payouts disabled: {e}");
-                prom::set_faucet_signer(None, faucet_address);
+                prom::set_faucet_signer(None, faucet_address.clone());
+                None
             }
-        }
+        };
+        celenium_stratum_bridge::treasury::set_routes(
+            config.global.faucet_bootstrap_address.clone(),
+            config.global.faucet_surplus_address.clone(),
+        );
+        celenium_stratum_bridge::treasury::start(
+            Arc::clone(&celenium_api),
+            faucet_state,
+            faucet_signer,
+            faucet_address,
+            config.global.faucet_surplus_address.clone(),
+            shutdown_rx.clone(),
+        )?;
         let web_dashboard_port = config.global.web_dashboard_port.clone();
         tokio::spawn(async move {
             if let Err(e) = prom::start_web_server_all(&web_dashboard_port).await {

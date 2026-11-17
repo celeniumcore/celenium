@@ -1,6 +1,10 @@
 # Spesifikasi Faucet Reservoir Celenium (CEN)
 
-Status: **diimplementasi + ter-commit lokal + tes lulus (bridge 81/81, 14 Nov 2026); belum push ke origin dan belum live di VPS**.
+Status saat ini: lihat [kebijakan reservoir berbasis dana nyata](reservoir-cash-policy.md).
+Bagian berikut menyimpan rancangan dan temuan historis 14 Nov 2026; angka target,
+ambang, dan status deploy di dalamnya bukan konfigurasi operasional terbaru.
+
+Catatan historis: **diimplementasi + ter-commit lokal + tes lulus (bridge 81/81, 14 Nov 2026); belum push ke origin dan belum live di VPS**.
 Lihat §9 untuk rincian mana yang sudah ada di kode dan mana
 yang masih rancangan operasional/deploy.
 

@@ -172,7 +172,7 @@ async fn run(directory: &Path) -> Result<()> {
             params.storage_mass_amount_floor = FLOOR;
             ensure!(client.get_server_info().await?.network_id.network_type == celenium_consensus_core::network::NetworkType::Simnet);
             println!("NETWORK simnet opt_in_floor={FLOOR} production_builder=true skip_pow={}", params.skip_proof_of_work);
-            mine(&client, &source, params.coinbase_maturity() + 10).await?;
+            mine(&client, &source, params.coinbase_maturity().max(200)).await?;
             let input = funded_input(&client, &source).await?;
             let signed = transfer(&input, &source, &destination, 1000, 509, &source_secret)?;
             let (_, legacy_mass) = fee_and_mass(&SIMNET_PARAMS, &signed)?;
@@ -182,6 +182,8 @@ async fn run(directory: &Path) -> Result<()> {
             let (shutdown, rx) = tokio::sync::watch::channel(false);
             let api = celenium_stratum_bridge::CeleniumApi::new(rpc.clone(), None, rx).await?;
             let mut ledger = celenium_stratum_bridge::FaucetState::default();
+            let snapshot = api.funding_snapshot(&source.to_string()).await?;
+            ledger.update_funding(snapshot.mature_pradha, snapshot.month, snapshot.observed_at);
             let claim = ledger.claim(&destination.to_string(), "isolated-test-device")?;
             ensure!(claim.balance_pradha == 1000 && claim.last_claim_payout_pradha == 1000);
             let ledger_path = directory.join("faucet-ledger.json");
