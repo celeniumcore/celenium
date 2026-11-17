@@ -7,21 +7,14 @@ mod utxo_set_override_inner {
         header::Header,
         muhash::MuHashExtensions,
         tx::TransactionOutpoint,
-        utxo::{UtxoEntry, utxo_collection::UtxoCollection},
+        utxo::UtxoEntry,
     };
     use celenium_hashes::Hash;
     use celenium_muhash::MuHash;
-    use itertools::Itertools;
 
     use crate::consensus::Consensus;
 
-    /// Builds the genesis premine UTXO set from the genesis coinbase outputs.
-    ///
-    /// rusty-kaspa commits an empty UTXO state at genesis, so genesis coinbase
-    /// outputs would never be spendable. Importing them here as the initial
-    /// UTXO set makes the CEN premine real. Entries are marked non-coinbase so
-    /// they are spendable immediately; the lock is the off-chain vesting
-    /// schedule documented in docs/vesting-schedule.md.
+    /// Import genesis outputs as non-coinbase entries; CLTV premine scripts still enforce vesting.
     pub fn genesis_premine_utxos(genesis: &GenesisBlock) -> Vec<(TransactionOutpoint, UtxoEntry)> {
         let mut utxos = Vec::new();
         for tx in genesis.build_genesis_transactions() {

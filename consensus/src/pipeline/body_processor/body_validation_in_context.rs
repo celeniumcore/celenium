@@ -114,6 +114,8 @@ mod tests {
         let consensus = TestConsensus::new(&config);
         let wait_handles = consensus.init();
         let body_processor = consensus.block_body_processor();
+        let pre_deflationary_subsidy = config.pre_deflationary_phase_base_subsidy;
+        let first_deflationary_subsidy = crate::processes::coinbase::SUBSIDY_BY_MONTH_TABLE[0].div_ceil(config.bps());
 
         consensus.add_header_only_block_with_parents(1.into(), vec![config.genesis.hash]).await.unwrap();
 
@@ -131,7 +133,7 @@ mod tests {
             block.header.hash_merkle_root = calc_hash_merkle_root(block.transactions.iter());
 
             assert_match!(
-                consensus.validate_and_insert_block(block.clone().to_immutable()).virtual_state_task.await, Err(RuleError::WrongSubsidy(expected,_)) if expected == 50000000000);
+                consensus.validate_and_insert_block(block.clone().to_immutable()).virtual_state_task.await, Err(RuleError::WrongSubsidy(expected,_)) if expected == pre_deflationary_subsidy);
 
             // The second time we send an invalid block we expect it to be a known invalid.
             assert_match!(
@@ -169,7 +171,7 @@ mod tests {
             let mut block = consensus.build_block_with_parents_and_transactions(7.into(), vec![6.into()], vec![]);
             block.transactions[0].payload[8..16].copy_from_slice(&(5_u64).to_le_bytes());
             block.header.hash_merkle_root = calc_hash_merkle_root(block.transactions.iter());
-            assert_match!(consensus.validate_and_insert_block(block.to_immutable()).virtual_state_task.await, Err(RuleError::WrongSubsidy(expected,_)) if expected == 44000000000);
+            assert_match!(consensus.validate_and_insert_block(block.to_immutable()).virtual_state_task.await, Err(RuleError::WrongSubsidy(expected,_)) if expected == first_deflationary_subsidy);
         }
 
         {

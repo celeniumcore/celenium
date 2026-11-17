@@ -18,6 +18,7 @@ use parking_lot::RwLock;
 
 use super::Consensus;
 use super::services::{DbDagTraversalManager, DbGhostdagManager, DbWindowManager};
+use super::utxo_set_override::{set_genesis_utxo_commitment_from_config, set_initial_utxo_set};
 use crate::pipeline::virtual_processor::test_block_builder::TestBlockBuilder;
 use crate::processes::window::WindowManager;
 use crate::{
@@ -62,6 +63,8 @@ pub struct TestSeqCommitLaneProof {
 impl TestConsensus {
     /// Creates a test consensus instance based on `config` with the provided `db` and `notification_sender`
     pub fn with_db(db: Arc<DB>, config: &Config, notification_sender: Sender<Notification>) -> Self {
+        let mut config = config.clone();
+        set_genesis_utxo_commitment_from_config(&mut config);
         let notification_root = Arc::new(ConsensusNotificationRoot::new(notification_sender));
         let counters = Default::default();
         let tx_script_cache_counters = Default::default();
@@ -75,6 +78,9 @@ impl TestConsensus {
             0,
             Arc::new(MiningRules::default()),
         ));
+        if config.process_genesis {
+            set_initial_utxo_set(&config, consensus.clone(), config.params.genesis.hash);
+        }
         let block_builder = TestBlockBuilder::new(consensus.virtual_processor.clone());
 
         Self { params: config.params.clone(), consensus, block_builder, _db_lifetime: Default::default() }
@@ -82,6 +88,8 @@ impl TestConsensus {
 
     /// Creates a test consensus instance based on `config` with a temp DB and the provided `notification_sender`
     pub fn with_notifier(config: &Config, notification_sender: Sender<Notification>, context: SubscriptionContext) -> Self {
+        let mut config = config.clone();
+        set_genesis_utxo_commitment_from_config(&mut config);
         let (db_lifetime, db) = create_temp_db!(ConnBuilder::default().with_files_limit(10));
         let notification_root = Arc::new(ConsensusNotificationRoot::with_context(notification_sender, context));
         let counters = Default::default();
@@ -96,6 +104,9 @@ impl TestConsensus {
             0,
             Arc::new(MiningRules::default()),
         ));
+        if config.process_genesis {
+            set_initial_utxo_set(&config, consensus.clone(), config.params.genesis.hash);
+        }
         let block_builder = TestBlockBuilder::new(consensus.virtual_processor.clone());
 
         Self { consensus, block_builder, params: config.params.clone(), _db_lifetime: db_lifetime }
@@ -103,6 +114,8 @@ impl TestConsensus {
 
     /// Creates a test consensus instance based on `config` with a temp DB and no notifier
     pub fn new(config: &Config) -> Self {
+        let mut config = config.clone();
+        set_genesis_utxo_commitment_from_config(&mut config);
         let (db_lifetime, db) = create_temp_db!(ConnBuilder::default().with_files_limit(10));
         let (dummy_notification_sender, _) = async_channel::unbounded();
         let notification_root = Arc::new(ConsensusNotificationRoot::new(dummy_notification_sender));
@@ -118,6 +131,9 @@ impl TestConsensus {
             0,
             Arc::new(MiningRules::default()),
         ));
+        if config.process_genesis {
+            set_initial_utxo_set(&config, consensus.clone(), config.params.genesis.hash);
+        }
         let block_builder = TestBlockBuilder::new(consensus.virtual_processor.clone());
 
         Self { consensus, block_builder, params: config.params.clone(), _db_lifetime: db_lifetime }
