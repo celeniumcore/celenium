@@ -34,6 +34,10 @@ pub struct FaucetFundingSnapshot {
 
 impl FaucetFundingSnapshot {
     pub fn combined(&self, now: u64, floor: u64, outstanding: u64) -> Option<FundingSnapshot> {
+        self.combined_with_service_reserve(now, floor, outstanding, service_reserve(1000))
+    }
+
+    pub fn combined_with_service_reserve(&self, now: u64, floor: u64, outstanding: u64, service: u64) -> Option<FundingSnapshot> {
         if !self.operational.is_fresh(now) {
             return None;
         }
@@ -42,7 +46,10 @@ impl FaucetFundingSnapshot {
         }
         let reserve = self.reserve.filter(|f| f.is_fresh(now) && f.month == self.operational.month)?;
         // A shrinking target cannot withdraw backing already owed to claimants.
-        let backing = outstanding.saturating_add(OPERATIONAL_BUFFER_PRADHA).saturating_sub(self.operational.mature_pradha);
+        let backing = outstanding
+            .saturating_add(OPERATIONAL_BUFFER_PRADHA)
+            .saturating_add(service)
+            .saturating_sub(self.operational.mature_pradha);
         let eligible = reserve.mature_pradha.min(reserve_target_pradha(floor).max(backing));
         Some(FundingSnapshot {
             mature_pradha: self.operational.mature_pradha.checked_add(eligible)?,
@@ -113,9 +120,41 @@ pub fn sweep_amount_with_service_reserve(mature: u64, floor: u64, outstanding: u
     mature.saturating_sub(protected_balance_with_service_reserve(floor, outstanding, service_reserve)).saturating_sub(fee)
 }
 
+pub fn sweep_amount_with_funding_sources(operational: u64, backup: u64, floor: u64, outstanding: u64, service: u64, fee: u64) -> u64 {
+    let protected = protected_balance_with_service_reserve(floor, outstanding, service);
+    operational.saturating_sub(protected.saturating_sub(backup)).saturating_sub(fee)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn protected_surplus_counts_reserve_inside_the_total_floor() {
+        let floor = 250_000_000_000_000;
+        let backup = 50_000_000_000_000;
+        let operational = 200_000_200_000_000;
+        let fee = 1000;
+        assert_eq!(sweep_amount_with_funding_sources(operational, backup, floor, 1000, service_reserve(1000), fee), 200_000_000 - fee);
+        assert_eq!(sweep_amount_with_funding_sources(200_000_000_000_000, backup, floor, 1000, service_reserve(1000), fee), 0);
+        assert_eq!(sweep_amount_with_funding_sources(300_000_000, 0, 0, 1000, service_reserve(1000), fee), 49_633_000);
+    }
+
+    #[test]
+    fn end_emission_uses_funded_backup_for_a_year_of_minimum_claims() {
+        let sources = FaucetFundingSnapshot {
+            operational: FundingSnapshot { observed_at: 100, month: 816, ..Default::default() },
+            reserve: Some(FundingSnapshot {
+                mature_pradha: OPERATIONAL_BUFFER_PRADHA + service_reserve(1000),
+                observed_at: 100,
+                month: 816,
+            }),
+            reserve_configured: true,
+        };
+        let combined = sources.combined(100, 0, 0).unwrap();
+        assert_eq!(available_for_claims(combined.mature_pradha, 0), service_reserve(1000));
+        assert_eq!(cash_daily_cap(combined.mature_pradha, 0, 0), 1000);
+    }
 
     #[test]
     fn empty_operational_wallet_can_use_a_funded_reserve() {
@@ -162,7 +201,7 @@ mod tests {
     #[test]
     fn reduced_target_preserves_only_actual_legacy_backing() {
         let outstanding = 60_000_000_000_000;
-        let needed = outstanding + OPERATIONAL_BUFFER_PRADHA;
+        let needed = outstanding + OPERATIONAL_BUFFER_PRADHA + service_reserve(1000);
         let sources = FaucetFundingSnapshot {
             operational: FundingSnapshot { observed_at: 100, ..Default::default() },
             reserve: Some(FundingSnapshot { mature_pradha: needed + 1000, observed_at: 100, month: 0 }),
@@ -170,7 +209,7 @@ mod tests {
         };
         let combined = sources.combined(100, 0, outstanding).unwrap();
         assert_eq!(combined.mature_pradha, needed);
-        assert_eq!(available_for_claims(combined.mature_pradha, outstanding), 0);
+        assert_eq!(available_for_claims(combined.mature_pradha, outstanding), service_reserve(1000));
         let mut short = sources;
         short.reserve.as_mut().unwrap().mature_pradha = 1000;
         assert_eq!(short.combined(100, 0, outstanding).unwrap().mature_pradha, 1000);

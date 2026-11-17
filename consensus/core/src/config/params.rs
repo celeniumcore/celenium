@@ -496,15 +496,23 @@ impl Params {
 
     pub fn override_params(self, overrides: OverrideParams) -> Self {
         let mut genesis = self.genesis.clone();
-        if let Some(allocation) = &overrides.mining_reserve {
-            assert_eq!(self.net.network_type, NetworkType::Simnet, "mining reserve requires a separately activated chain; only simnet override is enabled");
+        let allocation = overrides.mining_reserve.clone().or_else(|| genesis.mining_reserve.clone());
+        if let Some(allocation) = allocation {
+            assert_eq!(
+                self.net.network_type,
+                NetworkType::Simnet,
+                "mining reserve requires a separately activated chain; only simnet override is enabled"
+            );
             let effective = overrides.blockrate.as_ref().unwrap_or(&self.blockrate);
             assert_eq!(effective.target_time_per_block, 100, "mining reserve schedule requires 10 BPS");
             assert_eq!(overrides.pre_crescendo_target_time_per_block.unwrap_or(self.pre_crescendo_target_time_per_block), 100);
             assert_eq!(overrides.deflationary_phase_daa_score.unwrap_or(self.deflationary_phase_daa_score), 0);
-            assert!(!allocation.floor_script.script().is_empty() && !allocation.faucet_script.script().is_empty(), "reserve scripts must not be empty");
+            assert!(
+                !allocation.floor_script.script().is_empty() && !allocation.faucet_script.script().is_empty(),
+                "reserve scripts must not be empty"
+            );
             assert_ne!(allocation.floor_script, allocation.faucet_script, "reserve destinations must differ");
-            genesis.mining_reserve = Some(allocation.clone());
+            genesis.mining_reserve = Some(allocation);
             genesis.recompute_commitments();
         }
         Self {
@@ -795,7 +803,10 @@ mod tests {
         let mut value: OverrideParams = serde_json::from_str("{}").unwrap();
         value.mining_reserve = Some(super::super::genesis::MiningReserveAllocation {
             floor_script: crate::tx::ScriptPublicKey::from_vec(0, [alloc::vec![0x20], alloc::vec![1; 32], alloc::vec![0xac]].concat()),
-            faucet_script: crate::tx::ScriptPublicKey::from_vec(0, [alloc::vec![0x20], alloc::vec![2; 32], alloc::vec![0xac]].concat()),
+            faucet_script: crate::tx::ScriptPublicKey::from_vec(
+                0,
+                [alloc::vec![0x20], alloc::vec![2; 32], alloc::vec![0xac]].concat(),
+            ),
         });
         value
     }
@@ -839,6 +850,17 @@ mod tests {
         blockrate.target_time_per_block = 200;
         overrides.blockrate = Some(blockrate);
         SIMNET_PARAMS.override_params(overrides);
+    }
+
+    #[test]
+    #[should_panic(expected = "requires 10 BPS")]
+    fn reserve_overrides_cannot_bypass_schedule_checks_on_a_second_call() {
+        let allocated = SIMNET_PARAMS.override_params(reserve_overrides());
+        let mut second: OverrideParams = serde_json::from_str("{}").unwrap();
+        let mut blockrate = allocated.blockrate.clone();
+        blockrate.target_time_per_block = 200;
+        second.blockrate = Some(blockrate);
+        allocated.override_params(second);
     }
 
     #[test]

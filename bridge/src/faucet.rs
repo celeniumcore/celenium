@@ -510,7 +510,8 @@ impl FaucetState {
 
     pub fn update_funding_sources(&mut self, sources: crate::reservoir_funds::FaucetFundingSnapshot, now: u64) -> bool {
         let floor = crate::emission_policy::floor_pradha(sources.operational.month);
-        let Some(funding) = sources.combined(now, floor, self.total_outstanding()) else {
+        let Some(funding) = sources.combined_with_service_reserve(now, floor, self.total_outstanding(), self.service_reserve_pradha())
+        else {
             self.invalidate_funding();
             return false;
         };

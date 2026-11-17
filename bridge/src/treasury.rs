@@ -49,8 +49,19 @@ fn route_coinbase<'a>(
 pub fn coinbase_address(worker: &str, pool: Option<&str>) -> String {
     let status = status();
     let address = crate::prom::faucet_address();
-    let funding = crate::prom::faucet_state_snapshot().and_then(|s| s.lock().unwrap().funding_sources.map(|f| f.operational));
+    let funding = crate::prom::faucet_state_snapshot().and_then(|s| {
+        let state = s.lock().unwrap();
+        bootstrap_funding(state.funding_sources, FaucetState::now_secs(), state.total_outstanding())
+    });
     route_coinbase(worker, pool, status.bootstrap_source.as_deref(), address.as_deref(), funding, FaucetState::now_secs()).into()
+}
+
+fn bootstrap_funding(
+    sources: Option<crate::reservoir_funds::FaucetFundingSnapshot>,
+    now: u64,
+    outstanding: u64,
+) -> Option<crate::reservoir_funds::FundingSnapshot> {
+    sources.and_then(|funds| funds.combined(now, crate::emission_policy::floor_pradha(funds.operational.month), outstanding))
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -206,10 +217,11 @@ async fn cycle(
     let sources = crate::faucet_funding::refresh(api, state, source, backup.as_ref().map(|(address, _)| address.as_str())).await?;
     let funds = sources.operational;
     let now = FaucetState::now_secs();
-    let (outstanding, reserve) = {
+    let (outstanding, reserve, backup_eligible) = {
         let state = state.lock().unwrap();
         anyhow::ensure!(!state.storage_uncertain, "faucet ledger requires recovery");
-        (state.total_outstanding(), state.service_reserve_pradha())
+        let combined = state.funding.filter(|funds| funds.is_fresh(now)).ok_or_else(|| anyhow::anyhow!("faucet funding expired"))?;
+        (state.total_outstanding(), state.service_reserve_pradha(), combined.mature_pradha.saturating_sub(funds.mature_pradha))
     };
     let (Some(signer), Some(destination)) = (signer, destination) else { return Ok(()) };
     if now.saturating_sub(journal.last_sweep_secs) < 60 {
@@ -217,8 +229,14 @@ async fn cycle(
     }
     signer.ensure_matches(source)?;
     let floor = crate::emission_policy::floor_pradha(funds.month);
-    let provisional =
-        crate::reservoir_funds::sweep_amount_with_service_reserve(funds.mature_pradha, floor, outstanding, reserve, 1_000_000);
+    let provisional = crate::reservoir_funds::sweep_amount_with_funding_sources(
+        funds.mature_pradha,
+        backup_eligible,
+        floor,
+        outstanding,
+        reserve,
+        1_000_000,
+    );
     if provisional < 100_000_000 {
         return Ok(());
     }
@@ -227,8 +245,9 @@ async fn cycle(
     if amount < 100_000_000 {
         return Ok(());
     }
-    let permitted = crate::reservoir_funds::sweep_amount_with_service_reserve(
+    let permitted = crate::reservoir_funds::sweep_amount_with_funding_sources(
         funds.mature_pradha,
+        backup_eligible,
         floor,
         outstanding,
         reserve,
@@ -280,6 +299,20 @@ mod tests {
         assert_eq!(pending.transaction_json, "signed-transaction-fixture");
         assert_eq!(pending.transaction_id, "same-transaction");
         assert_eq!(restored.total_returned_pradha, 0);
+    }
+
+    #[test]
+    fn bootstrap_stops_when_operational_and_reserve_meet_the_shared_floor() {
+        let operational = 200_000_000_000_000;
+        let backup = 50_000_000_000_000;
+        let funds = crate::reservoir_funds::FaucetFundingSnapshot {
+            operational: crate::reservoir_funds::FundingSnapshot { mature_pradha: operational, month: 0, observed_at: 100 },
+            reserve: Some(crate::reservoir_funds::FundingSnapshot { mature_pradha: backup, month: 0, observed_at: 100 }),
+            reserve_configured: true,
+        };
+        let combined = bootstrap_funding(Some(funds), 100, 0).unwrap();
+        assert_eq!(combined.mature_pradha, crate::emission_policy::floor_pradha(0));
+        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(combined), 100), "operator");
     }
 
     #[test]
