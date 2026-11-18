@@ -45,6 +45,7 @@ pub struct GlobalConfig {
     // Pool mode (opsional): arahkan coinbase ke alamat pool & aktifkan reservoir faucet.
     pub pool_address: Option<String>,
     pub faucet_address: Option<String>,
+    pub faucet_reserve_address: Option<String>,
     pub faucet_surplus_address: Option<String>,
     pub faucet_bootstrap_address: Option<String>,
     /// Saklar reservoir: 0 = faucet tidak didanai, >0 = aktif memakai kebijakan
@@ -217,6 +218,7 @@ impl Default for GlobalConfig {
             coinbase_tag_suffix: None,
             pool_address: None,
             faucet_address: None,
+            faucet_reserve_address: None,
             faucet_surplus_address: None,
             faucet_bootstrap_address: None,
             faucet_cut_fraction: 0.015,
@@ -305,5 +307,19 @@ impl BridgeConfig {
     pub(crate) fn to_yaml(&self) -> Result<String, serde_yaml::Error> {
         let yaml = BridgeConfigYaml { global: &self.global, instances: &self.instances };
         serde_yaml::to_string(&yaml)
+    }
+}
+
+#[cfg(test)]
+mod reserve_tests {
+    use super::*;
+
+    #[test]
+    fn reserve_is_opt_in_and_roundtrips_in_yaml() {
+        let mut config = BridgeConfig::from_yaml("{}").unwrap();
+        assert!(config.global.faucet_reserve_address.is_none());
+        config.global.faucet_reserve_address = Some("reserve-address".into());
+        let restored = BridgeConfig::from_yaml(&config.to_yaml().unwrap()).unwrap();
+        assert_eq!(restored.global.faucet_reserve_address.as_deref(), Some("reserve-address"));
     }
 }
