@@ -57,23 +57,43 @@ impl std::error::Error for SignerError {}
 impl FaucetSigner {
     /// Baca kunci dari environment lalu turunkan alamatnya.
     pub fn from_env() -> Result<Self, SignerError> {
+        Self::from_env_for_network(Prefix::Mainnet)
+    }
+
+    pub fn from_env_for_network(prefix: Prefix) -> Result<Self, SignerError> {
         let secret_hex = match std::env::var("CELENIUM_FAUCET_PRIVKEY") {
             Ok(v) if !v.trim().is_empty() => v.trim().to_string(),
             _ => {
                 let path = std::env::var("CELENIUM_FAUCET_KEYFILE").map_err(|_| SignerError::NoKeyConfigured)?;
-                let text = std::fs::read_to_string(&path).map_err(|e| SignerError::BadKeyFile(format!("{path}: {e}")))?;
-                text.lines()
-                    .find_map(|l| {
-                        let (k, v) = l.split_once('=')?;
-                        (k.trim() == "privkey" && !v.trim().is_empty()).then(|| v.trim().to_string())
-                    })
-                    .ok_or_else(|| SignerError::BadKeyFile(format!("{path}: no `privkey=` line")))?
+                return Self::from_keyfile_for_network(std::path::Path::new(&path), prefix);
             }
         };
-        Self::from_secret_hex(secret_hex)
+        Self::from_secret_hex_for_network(secret_hex, prefix)
+    }
+
+    pub fn from_reserve_env(prefix: Prefix) -> Result<Self, SignerError> {
+        let path = std::env::var_os("CELENIUM_FAUCET_RESERVE_KEYFILE")
+            .ok_or_else(|| SignerError::BadKeyFile("set CELENIUM_FAUCET_RESERVE_KEYFILE".into()))?;
+        Self::from_keyfile_for_network(std::path::Path::new(&path), prefix)
+    }
+
+    pub fn from_keyfile_for_network(path: &std::path::Path, prefix: Prefix) -> Result<Self, SignerError> {
+        let text = std::fs::read_to_string(path).map_err(|e| SignerError::BadKeyFile(e.to_string()))?;
+        let secret_hex = text
+            .lines()
+            .find_map(|line| {
+                let (key, value) = line.split_once('=')?;
+                (key.trim() == "privkey" && !value.trim().is_empty()).then(|| value.trim().to_string())
+            })
+            .ok_or_else(|| SignerError::BadKeyFile("no `privkey=` line".into()))?;
+        Self::from_secret_hex_for_network(secret_hex, prefix)
     }
 
     pub fn from_secret_hex(secret_hex: String) -> Result<Self, SignerError> {
+        Self::from_secret_hex_for_network(secret_hex, Prefix::Mainnet)
+    }
+
+    pub fn from_secret_hex_for_network(secret_hex: String, prefix: Prefix) -> Result<Self, SignerError> {
         let secret = hex_bytes(&secret_hex).map_err(SignerError::BadSecret)?;
         let secret: [u8; 32] =
             secret.try_into().map_err(|v: Vec<u8>| SignerError::BadSecret(format!("expected 32 bytes, got {}", v.len())))?;
@@ -82,12 +102,11 @@ impl FaucetSigner {
         let keypair = Keypair::from_seckey_slice(&secp, &secret)
             .map_err(|e| SignerError::BadSecret(format!("not a valid secp256k1 secret: {e}")))?;
         let (xonly, _parity) = keypair.x_only_public_key();
-        let address = Address::new(Prefix::Mainnet, Version::PubKey, &xonly.serialize()).to_string();
+        let address = Address::new(prefix, Version::PubKey, &xonly.serialize()).to_string();
 
         Ok(Self { secret_hex: hex_string(&secret), address })
     }
 
-    /// Alamat `cen69:` milik kunci ini.
     pub fn address(&self) -> &str {
         &self.address
     }
@@ -100,10 +119,10 @@ impl FaucetSigner {
 
     /// Tolak penandatanganan bila alamat config bukan alamat kunci ini.
     pub fn ensure_matches(&self, configured: &str) -> Result<(), SignerError> {
-        if configured.trim() == self.address {
+        if configured == self.address {
             Ok(())
         } else {
-            Err(SignerError::AddressMismatch { derived: self.address.clone(), configured: configured.trim().to_string() })
+            Err(SignerError::AddressMismatch { derived: self.address.clone(), configured: configured.to_string() })
         }
     }
 }
@@ -117,7 +136,7 @@ fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
     let bytes = s.as_bytes();
     for i in (0..bytes.len()).step_by(2) {
         let pair = std::str::from_utf8(&bytes[i..i + 2]).map_err(|_| "non-utf8 input".to_string())?;
-        out.push(u8::from_str_radix(pair, 16).map_err(|_| format!("`{pair}` is not hex"))?);
+        out.push(u8::from_str_radix(pair, 16).map_err(|_| "input contains non-hex digits".to_string())?);
     }
     Ok(out)
 }
@@ -136,6 +155,18 @@ mod tests {
 
     // Kunci uji tetap: hanya untuk membuktikan derivasi alamat deterministik.
     const TEST_SECRET: &str = "REDACTED-FAUCET-DEV-KEY";
+
+    #[test]
+    fn network_aware_signer_retains_mainnet_default_and_redacts_secret() {
+        let main = FaucetSigner::from_secret_hex(TEST_SECRET.into()).unwrap();
+        let sim = FaucetSigner::from_secret_hex_for_network(TEST_SECRET.into(), Prefix::Simnet).unwrap();
+        let parsed = Address::try_from(sim.address()).unwrap();
+        assert_eq!(parsed.prefix, Prefix::Simnet);
+        assert_ne!(main.address(), sim.address());
+        assert!(main.ensure_matches(sim.address()).is_err());
+        assert!(sim.ensure_matches(&format!(" {}", sim.address())).is_err());
+        assert!(!format!("{sim:?}").contains(TEST_SECRET));
+    }
 
     #[test]
     fn derives_stable_mainnet_address() {

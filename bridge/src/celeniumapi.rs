@@ -983,6 +983,52 @@ impl CeleniumApi {
         Ok(crate::reservoir_funds::FundingSnapshot { mature_pradha, observed_at: crate::faucet::FaucetState::now_secs(), month })
     }
 
+    pub async fn faucet_funding_snapshot(
+        &self,
+        operational: &str,
+        reserve: Option<&str>,
+    ) -> Result<crate::reservoir_funds::FaucetFundingSnapshot> {
+        let prefix = crate::faucet_funding::validate_addresses(operational, reserve)?;
+        let info = self.client.get_server_info_call(None, GetServerInfoRequest {}).await.context("get_server_info failed")?;
+        require_consensus_utxos(&info.server_version)?;
+        let params = crate::transfer::network_params(info.network_id)?;
+        anyhow::ensure!(prefix == params.prefix(), "address network does not match node network");
+        let month = funding_month(&params, info.virtual_daa_score)?;
+        let source = Address::try_from(operational)?;
+        let backup = reserve.map(Address::try_from).transpose()?;
+        let mut addresses = vec![source.clone()];
+        addresses.extend(backup.iter().cloned());
+        let mut spent = self.pending_spent_outpoints().await?;
+        let response = self
+            .client
+            .get_utxos_by_addresses_call(None, celenium_rpc_core::GetUtxosByAddressesRequest::new(addresses))
+            .await
+            .context("get_utxos_by_addresses failed")?;
+        spent.extend(self.pending_spent_outpoints().await?);
+        let after = self.client.get_server_info_call(None, GetServerInfoRequest {}).await?;
+        anyhow::ensure!(info.network_id == after.network_id, "node network changed during funding query");
+        let mut seen = HashSet::new();
+        let entries: Vec<celenium_consensus_core::tx::UtxoEntry> = unspent_utxos(response.entries, &spent)
+            .filter(|entry| seen.insert(entry.outpoint.clone()))
+            .map(|entry| entry.utxo_entry.into())
+            .collect();
+        let observed_at = crate::faucet::FaucetState::now_secs();
+        let snapshot = |address: &Address| -> Result<crate::reservoir_funds::FundingSnapshot> {
+            let mature_pradha = mature_funding_total(
+                &params,
+                info.virtual_daa_score,
+                &celenium_txscript::pay_to_address_script(address),
+                entries.iter().cloned(),
+            )?;
+            Ok(crate::reservoir_funds::FundingSnapshot { mature_pradha, observed_at, month })
+        };
+        Ok(crate::reservoir_funds::FaucetFundingSnapshot {
+            operational: snapshot(&source)?,
+            reserve: backup.as_ref().map(snapshot).transpose()?,
+            reserve_configured: reserve.is_some(),
+        })
+    }
+
     pub async fn get_transaction_output_present(&self, address: &str, txid: &str) -> Result<bool> {
         RpcHash::from_str(txid).context("invalid transaction id")?;
         let source = Address::try_from(address).context("invalid transaction output address")?;

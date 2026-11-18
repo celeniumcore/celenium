@@ -424,10 +424,8 @@ mod tests {
 
     #[test]
     fn daily_cap_covers_one_full_max_claim() {
-        // Cap harian harus mengizinkan setidaknya satu klaim pada plafon penuh
-        // selama fase emisi — kalau tidak, reward maksimum 1000 pradha tidak
-        // pernah bisa dibayar.
-        let max_reward = 1_000u64;
+        // Cap harian harus mengizinkan satu klaim pada batas minimum era aktif.
+        let max_reward = crate::reward_policy::INITIAL_MIN_REWARD_PRADHA;
         for m in [0u64, 24, 48, 120] {
             assert!(daily_cap_pradha(m) >= max_reward, "cap bulan {m} = {} < 1 klaim penuh", daily_cap_pradha(m));
         }
