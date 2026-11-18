@@ -50,7 +50,7 @@ impl TransactionValidator {
             return Err(TxRuleError::CoinbaseNonZeroMassCommitment);
         }
 
-        let outputs_limit = self.ghostdag_k as u64 + 2;
+        let outputs_limit = self.ghostdag_k as u64 + 2 + if self.coinbase_reserve_activation_daa_score.is_some() { 2 } else { 0 };
         if tx.outputs.len() as u64 > outputs_limit {
             return Err(TxRuleError::CoinbaseTooManyOutputs(tx.outputs.len(), outputs_limit));
         }
@@ -63,9 +63,20 @@ impl TransactionValidator {
         Ok(())
     }
 
+    pub(crate) fn validate_coinbase_outputs_count(&self, tx: &Transaction, reserve_outputs: u64) -> TxResult<()> {
+        if !tx.is_coinbase() {
+            return Ok(());
+        }
+        let outputs_limit = self.ghostdag_k as u64 + 2 + reserve_outputs;
+        if tx.outputs.len() as u64 > outputs_limit {
+            return Err(TxRuleError::CoinbaseTooManyOutputs(tx.outputs.len(), outputs_limit));
+        }
+        Ok(())
+    }
+
     fn check_transaction_outputs_count(&self, tx: &Transaction) -> TxResult<()> {
         if tx.is_coinbase() {
-            // We already check coinbase outputs count vs. Ghostdag K + 2
+            // Block context applies the activation-specific reserve allowance.
             return Ok(());
         }
         if tx.outputs.len() > self.max_tx_outputs {

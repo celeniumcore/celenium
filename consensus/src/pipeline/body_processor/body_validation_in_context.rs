@@ -1,4 +1,5 @@
 use super::BlockBodyProcessor;
+use crate::model::stores::ghostdag::GhostdagStoreReader;
 use crate::{
     errors::{BlockProcessResult, RuleError},
     model::stores::statuses::StatusesStoreReader,
@@ -20,11 +21,25 @@ impl BlockBodyProcessor {
     pub fn validate_body_in_context(self: &Arc<Self>, block: &Block) -> BlockProcessResult<()> {
         self.check_parent_bodies_exist(block)?;
         self.check_coinbase_blue_score_and_subsidy(block)?;
+        self.check_coinbase_output_count(block)?;
         self.check_block_transactions_in_context(block)
     }
 
     pub fn validate_trusted_body_in_context(self: &Arc<Self>, block: &Block) -> BlockProcessResult<()> {
-        self.check_coinbase_blue_score_and_subsidy(block)
+        self.check_coinbase_blue_score_and_subsidy(block)?;
+        self.check_coinbase_output_count(block)
+    }
+
+    fn check_coinbase_output_count(self: &Arc<Self>, block: &Block) -> BlockProcessResult<()> {
+        let ghostdag = self._ghostdag_store.get_data(block.hash()).unwrap();
+        let daa_window = self.window_manager.block_daa_window(&ghostdag)?;
+        let eligible = ghostdag.unordered_mergeset().filter(|hash| !daa_window.mergeset_non_daa.contains(hash)).count() as u64;
+        let reserve_outputs = if self.coinbase_manager.reserve_fork_crosses_interval(daa_window.daa_score, eligible) { 2 } else { 0 };
+        let coinbase = &block.transactions[0];
+        if let Err(e) = self.transaction_validator.validate_coinbase_outputs_count(coinbase, reserve_outputs) {
+            return Err(RuleError::TxInContextFailed(coinbase.id(), e));
+        }
+        Ok(())
     }
 
     fn check_block_transactions_in_context(self: &Arc<Self>, block: &Block) -> BlockProcessResult<()> {

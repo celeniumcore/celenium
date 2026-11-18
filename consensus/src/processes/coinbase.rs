@@ -118,6 +118,13 @@ impl CoinbaseManager {
         self.reserve_fork.as_ref().is_some_and(|fork| daa_score >= fork.activation_daa_score)
     }
 
+    pub(crate) fn reserve_fork_crosses_interval(&self, daa_score: u64, eligible_mergeset: u64) -> bool {
+        self.reserve_fork.as_ref().is_some_and(|fork| {
+            let start = daa_score.checked_sub(eligible_mergeset).expect("DAA score must cover eligible mergeset");
+            start < fork.activation_daa_score && daa_score >= fork.activation_daa_score
+        })
+    }
+
     pub fn accepted_slot_subsidy(&self, index: u64) -> Option<u64> {
         self.reserve_fork.as_ref().map(|fork| {
             celenium_consensus_core::config::mining_reserve::ActivationSchedule::new(fork.activation_daa_score)
@@ -171,8 +178,7 @@ impl CoinbaseManager {
 
         if let Some(fork) = &self.reserve_fork {
             let eligible = ghostdag_data.unordered_mergeset().filter(|hash| !mergeset_non_daa.contains(hash)).count() as u64;
-            let start = daa_score.checked_sub(eligible).expect("DAA score must cover eligible mergeset");
-            if start < fork.activation_daa_score && daa_score >= fork.activation_daa_score {
+            if self.reserve_fork_crosses_interval(daa_score, eligible) {
                 use celenium_consensus_core::config::mining_reserve::{FAUCET_RESERVE, GENERAL_RESERVE};
                 let index = outputs.len() - usize::from(red_reward > 0);
                 outputs.insert(index, TransactionOutput::new(GENERAL_RESERVE, fork.floor_script.clone()));

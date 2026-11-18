@@ -20,6 +20,7 @@ pub struct TransactionValidator {
     coinbase_payload_script_public_key_max_len: u8,
     coinbase_maturity: u64,
     ghostdag_k: KType,
+    coinbase_reserve_activation_daa_score: Option<u64>,
     sig_cache: Cache<SigCacheKey, bool>,
     mass_per_sig_op: u64,
 
@@ -48,6 +49,7 @@ impl TransactionValidator {
             coinbase_payload_script_public_key_max_len,
             coinbase_maturity,
             ghostdag_k,
+            coinbase_reserve_activation_daa_score: None,
             sig_cache: Cache::with_counters(10_000, counters),
             mass_calculator,
             mass_per_sig_op,
@@ -72,9 +74,15 @@ impl TransactionValidator {
             coinbase_payload_script_public_key_max_len,
             coinbase_maturity,
             ghostdag_k,
+            coinbase_reserve_activation_daa_score: None,
             sig_cache: Cache::with_counters(10_000, counters),
             mass_calculator: MassCalculator::new(0, 0, 0),
             mass_per_sig_op: 0,
         }
+    }
+
+    pub(crate) fn with_coinbase_reserve_activation(mut self, activation_daa_score: Option<u64>) -> Self {
+        self.coinbase_reserve_activation_daa_score = activation_daa_score;
+        self
     }
 }

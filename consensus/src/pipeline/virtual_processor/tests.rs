@@ -8,7 +8,7 @@ use celenium_consensus_core::{
     coinbase::MinerData,
     config::{ConfigBuilder, params::MAINNET_PARAMS},
     constants::BLOCK_VERSION,
-    tx::{ScriptPublicKey, ScriptVec, Transaction},
+    tx::{ScriptPublicKey, ScriptVec, Transaction, TransactionOutput},
 };
 use celenium_hashes::Hash;
 use std::{collections::VecDeque, thread::JoinHandle};
@@ -324,6 +324,7 @@ async fn reserve_fork_preserves_genesis_and_conserves_parallel_acceptance_interv
     let config = ConfigBuilder::new(MAINNET_PARAMS)
         .skip_proof_of_work()
         .edit_consensus_params(|p| {
+            p.blockrate.ghostdag_k = 1;
             p.mining_reserve_fork = Some(MiningReserveFork {
                 activation_daa_score: activation,
                 floor_script: floor_script.clone(),
@@ -335,12 +336,70 @@ async fn reserve_fork_preserves_genesis_and_conserves_parallel_acceptance_interv
     let mut ctx = TestContext::new(TestConsensus::new(&config));
     let schedule = ActivationSchedule::new(activation).unwrap();
     let genesis_txid = config.genesis.build_genesis_transactions()[0].id();
+    let mut post_activation_extra_rejected = false;
+
+    let mut pre_activation = ctx.build_block_template(88, ctx.simulated_time + config.target_time_per_block()).block;
+    assert!(pre_activation.header.daa_score < activation);
+    pre_activation.transactions[0].outputs =
+        (0..4).map(|index| TransactionOutput::new(1, ScriptPublicKey::from_vec(0, vec![1, index]))).collect();
+    pre_activation.header.hash_merkle_root =
+        celenium_consensus_core::merkle::calc_hash_merkle_root(pre_activation.transactions.iter());
+    pre_activation.header.finalize();
+    let rejected = ctx.consensus.validate_and_insert_block(pre_activation.to_immutable()).virtual_state_task.await;
+    assert!(matches!(
+        rejected,
+        Err(crate::errors::RuleError::TxInContextFailed(
+            _,
+            crate::processes::transaction_validator::errors::TxRuleError::CoinbaseTooManyOutputs(4, 3)
+        ))
+    ));
+
     for _ in 0..12 {
         ctx.build_block_template_row(0..3).validate_and_insert_row().await.assert_valid_utxo_tip();
         ctx.simulated_time += 100;
         let template = ctx.build_block_template(90, ctx.simulated_time);
         let daa = template.block.header.daa_score;
         let coinbase = &template.block.transactions[0];
+        let floor_outputs = coinbase.outputs.iter().filter(|output| output.script_public_key == floor_script).count();
+        let faucet_outputs = coinbase.outputs.iter().filter(|output| output.script_public_key == faucet_script).count();
+        assert_eq!(floor_outputs, faucet_outputs, "reserve recipients must be paid together at DAA {daa}");
+        assert!(floor_outputs <= 1, "reserve outputs must not duplicate on one branch at DAA {daa}");
+        if floor_outputs == 1 {
+            assert_eq!(
+                coinbase
+                    .outputs
+                    .iter()
+                    .filter(|output| output.script_public_key == floor_script)
+                    .map(|output| output.value)
+                    .sum::<u64>(),
+                GENERAL_RESERVE
+            );
+            assert_eq!(
+                coinbase
+                    .outputs
+                    .iter()
+                    .filter(|output| output.script_public_key == faucet_script)
+                    .map(|output| output.value)
+                    .sum::<u64>(),
+                FAUCET_RESERVE
+            );
+        }
+        if daa >= activation && floor_outputs == 0 && !post_activation_extra_rejected {
+            let mut invalid = template.block.clone();
+            invalid.transactions[0].outputs =
+                (0..4).map(|index| TransactionOutput::new(1, ScriptPublicKey::from_vec(0, vec![2, index]))).collect();
+            invalid.header.hash_merkle_root = celenium_consensus_core::merkle::calc_hash_merkle_root(invalid.transactions.iter());
+            invalid.header.finalize();
+            let rejected = ctx.consensus.validate_and_insert_block(invalid.to_immutable()).virtual_state_task.await;
+            assert!(matches!(
+                rejected,
+                Err(crate::errors::RuleError::TxInContextFailed(
+                    _,
+                    crate::processes::transaction_validator::errors::TxRuleError::CoinbaseTooManyOutputs(4, 3)
+                ))
+            ));
+            post_activation_extra_rejected = true;
+        }
         let entries = ctx.consensus.get_virtual_utxos(None, 10_000, false);
         let issued: u64 = entries.iter().filter(|(op, _)| op.transaction_id != genesis_txid).map(|(_, entry)| entry.amount).sum();
         let paid: u64 = coinbase.outputs.iter().map(|output| output.value).sum();
@@ -354,6 +413,7 @@ async fn reserve_fork_preserves_genesis_and_conserves_parallel_acceptance_interv
         ctx.current_templates.push_back(template);
         ctx.validate_and_insert_row().await.assert_valid_utxo_tip();
     }
+    assert!(post_activation_extra_rejected, "expected a post-activation non-crossing block");
 }
 
 fn new_miner_data() -> MinerData {

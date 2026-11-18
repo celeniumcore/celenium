@@ -144,7 +144,8 @@ impl ConsensusServices {
             tx_script_cache_counters,
             mass_calculator.clone(),
             params.mass_per_sig_op,
-        );
+        )
+        .with_coinbase_reserve_activation(params.mining_reserve_fork.as_ref().map(|fork| fork.activation_daa_score));
 
         let pruning_point_manager = PruningPointManager::new(
             params.pruning_depth(),
