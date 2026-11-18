@@ -82,10 +82,10 @@ async fn exercise(directory: &Path, rpc: &str) -> Result<()> {
         println!("UNFUNDED new_claim_rejected=true");
         mine(&client, &source, 2700).await?;
         let funds = api.funding_snapshot(&source.to_string()).await?;
-        ensure!(funds.mature_pradha > reservoir_funds::OPERATIONAL_BUFFER_PRADHA + 1000);
+        ensure!(funds.mature_pradha > reservoir_funds::OPERATIONAL_BUFFER_PRADHA + 100_000);
         ledger.update_funding(funds.mature_pradha, funds.month, funds.observed_at);
         let claim = ledger.claim(&participant.to_string(), "test-device")?;
-        ensure!(claim.balance_pradha == 1000);
+        ensure!((100_000..=500_000).contains(&claim.balance_pradha));
         let reserve = ledger.service_reserve_pradha();
         // Zero floor exercises the end-emission boundary without changing consensus.
         let requested = reservoir_funds::sweep_amount_with_service_reserve(funds.mature_pradha, 0, ledger.total_outstanding(), reserve, 1_000_000);
@@ -115,7 +115,7 @@ async fn exercise(directory: &Path, rpc: &str) -> Result<()> {
         ensure!(received == amount, "journal replay paid a second amount");
         let after = api.funding_snapshot(&source.to_string()).await?;
         ensure!(after.mature_pradha >= reservoir_funds::protected_balance_with_service_reserve(0, ledger.total_outstanding(), reserve));
-        ensure!(ledger.balance(&participant.to_string()).unwrap().balance_pradha == 1000);
+        ensure!(ledger.balance(&participant.to_string()).unwrap().balance_pradha == claim.balance_pradha);
         let onward = api.prepare_transfer(&miner_fund.to_string(), &participant.to_string(), amount / 2, &hex::encode(miner_secret)).await?;
         api.submit_prepared_transfer(onward).await?;
         mine(&client, &source, 15).await?;

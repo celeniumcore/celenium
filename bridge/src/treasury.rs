@@ -35,9 +35,17 @@ fn route_coinbase<'a>(
     reservoir: Option<&'a str>,
     funds: Option<crate::reservoir_funds::FundingSnapshot>,
     now: u64,
+    (outstanding, service): (u64, u64),
 ) -> &'a str {
     if bootstrap == Some(worker)
-        && funds.is_some_and(|f| f.is_fresh(now) && f.mature_pradha < crate::emission_policy::floor_pradha(f.month))
+        && funds.is_some_and(|f| {
+            let target = crate::reservoir_funds::protected_balance_with_service_reserve(
+                crate::emission_policy::floor_pradha(f.month),
+                outstanding,
+                service,
+            );
+            f.is_fresh(now) && f.mature_pradha < target
+        })
     {
         if let Some(reservoir) = reservoir {
             return reservoir;
@@ -49,19 +57,26 @@ fn route_coinbase<'a>(
 pub fn coinbase_address(worker: &str, pool: Option<&str>) -> String {
     let status = status();
     let address = crate::prom::faucet_address();
-    let funding = crate::prom::faucet_state_snapshot().and_then(|s| {
-        let state = s.lock().unwrap();
-        bootstrap_funding(state.funding_sources, FaucetState::now_secs(), state.total_outstanding())
-    });
-    route_coinbase(worker, pool, status.bootstrap_source.as_deref(), address.as_deref(), funding, FaucetState::now_secs()).into()
+    let now = FaucetState::now_secs();
+    let (funding, backing) = crate::prom::faucet_state_snapshot()
+        .map(|s| {
+            let state = s.lock().unwrap();
+            let backing = (state.total_outstanding(), state.service_reserve_pradha());
+            (bootstrap_funding(state.funding_sources, now, backing.0, backing.1), backing)
+        })
+        .unwrap_or((None, (0, 0)));
+    route_coinbase(worker, pool, status.bootstrap_source.as_deref(), address.as_deref(), funding, now, backing).into()
 }
 
 fn bootstrap_funding(
     sources: Option<crate::reservoir_funds::FaucetFundingSnapshot>,
     now: u64,
     outstanding: u64,
+    service: u64,
 ) -> Option<crate::reservoir_funds::FundingSnapshot> {
-    sources.and_then(|funds| funds.combined(now, crate::emission_policy::floor_pradha(funds.operational.month), outstanding))
+    sources.and_then(|funds| {
+        funds.combined_with_service_reserve(now, crate::emission_policy::floor_pradha(funds.operational.month), outstanding, service)
+    })
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -359,6 +374,94 @@ mod tests {
     }
 
     #[test]
+    fn bootstrap_protects_legacy_liabilities_below_the_floor() {
+        let outstanding = 60_000_000_000_000;
+        let service = crate::reservoir_funds::service_reserve(500_000);
+        let funds = crate::reservoir_funds::FundingSnapshot { mature_pradha: outstanding, month: 816, observed_at: 100 };
+        assert!(crate::emission_policy::floor_pradha(funds.month) < outstanding);
+        assert_eq!(
+            route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(funds), 100, (outstanding, service)),
+            "reservoir"
+        );
+    }
+
+    #[test]
+    fn bootstrap_replenishes_a_one_pradha_service_reserve_deficit() {
+        let outstanding = 100_000_000;
+        let service = crate::reservoir_funds::service_reserve(500_000);
+        let target = outstanding + crate::reservoir_funds::OPERATIONAL_BUFFER_PRADHA + service;
+        for (mature_pradha, expected) in [(target - 1, "reservoir"), (target, "pool"), (target + 1, "pool")] {
+            let funds = crate::reservoir_funds::FundingSnapshot { mature_pradha, month: 816, observed_at: 100 };
+            assert_eq!(
+                route_coinbase(
+                    "operator",
+                    Some("pool"),
+                    Some("operator"),
+                    Some("reservoir"),
+                    Some(funds),
+                    100,
+                    (outstanding, service),
+                ),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn bootstrap_combines_actual_service_reserve_before_testing_target() {
+        let outstanding = 60_000_000_000_000;
+        let service = crate::reservoir_funds::service_reserve(500_000);
+        let target = outstanding + crate::reservoir_funds::OPERATIONAL_BUFFER_PRADHA + service;
+        let mut sources = crate::reservoir_funds::FaucetFundingSnapshot {
+            operational: crate::reservoir_funds::FundingSnapshot { mature_pradha: 0, month: 816, observed_at: 100 },
+            reserve: Some(crate::reservoir_funds::FundingSnapshot { mature_pradha: target, month: 816, observed_at: 100 }),
+            reserve_configured: true,
+        };
+        for (mature_pradha, expected) in [(target, "operator"), (target - 1, "reservoir")] {
+            sources.reserve.as_mut().unwrap().mature_pradha = mature_pradha;
+            let combined = bootstrap_funding(Some(sources), 100, outstanding, service).unwrap();
+            assert_eq!(combined.mature_pradha, mature_pradha);
+            assert_eq!(
+                route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(combined), 100, (outstanding, service)),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn bootstrap_never_redirects_unconfigured_workers_or_stale_funding() {
+        let funds = crate::reservoir_funds::FundingSnapshot { mature_pradha: 0, month: 816, observed_at: 100 };
+        let backing = (100_000_000, crate::reservoir_funds::service_reserve(500_000));
+        for now in [99, 131] {
+            assert_eq!(
+                route_coinbase("operator", Some("pool"), Some("operator"), Some("reservoir"), Some(funds), now, backing),
+                "pool"
+            );
+        }
+        assert_eq!(route_coinbase("other", None, Some("operator"), Some("reservoir"), Some(funds), 100, backing), "other");
+        assert_eq!(route_coinbase("other", Some("pool"), Some("operator"), Some("reservoir"), Some(funds), 100, backing), "pool");
+        assert_eq!(route_coinbase("operator", None, None, Some("reservoir"), Some(funds), 100, backing), "operator");
+        assert_eq!(route_coinbase("operator", None, Some("operator"), None, Some(funds), 100, backing), "operator");
+        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), None, 100, backing), "operator");
+    }
+
+    #[test]
+    fn bootstrap_rejects_incomplete_or_expired_combined_snapshots() {
+        let mut sources = crate::reservoir_funds::FaucetFundingSnapshot {
+            operational: crate::reservoir_funds::FundingSnapshot { mature_pradha: 0, month: 816, observed_at: 100 },
+            reserve: None,
+            reserve_configured: true,
+        };
+        let service = crate::reservoir_funds::service_reserve(500_000);
+        assert!(bootstrap_funding(Some(sources), 100, 100_000_000, service).is_none());
+        sources.reserve = Some(crate::reservoir_funds::FundingSnapshot { mature_pradha: u64::MAX, month: 816, observed_at: 69 });
+        assert!(bootstrap_funding(Some(sources), 100, 100_000_000, service).is_none());
+        sources.reserve.as_mut().unwrap().observed_at = 100;
+        sources.operational.observed_at = 69;
+        assert!(bootstrap_funding(Some(sources), 100, 100_000_000, service).is_none());
+    }
+
+    #[test]
     fn bootstrap_stops_when_operational_and_reserve_meet_the_shared_floor() {
         let operational = 200_000_000_000_000;
         let backup = 50_000_000_000_000;
@@ -367,19 +470,19 @@ mod tests {
             reserve: Some(crate::reservoir_funds::FundingSnapshot { mature_pradha: backup, month: 0, observed_at: 100 }),
             reserve_configured: true,
         };
-        let combined = bootstrap_funding(Some(funds), 100, 0).unwrap();
+        let combined = bootstrap_funding(Some(funds), 100, 0, crate::reservoir_funds::service_reserve(1000)).unwrap();
         assert_eq!(combined.mature_pradha, crate::emission_policy::floor_pradha(0));
-        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(combined), 100), "operator");
+        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(combined), 100, (0, 0)), "operator");
     }
 
     #[test]
     fn only_operator_bootstrap_worker_funds_reservoir() {
         let funds = crate::reservoir_funds::FundingSnapshot { mature_pradha: 0, month: 0, observed_at: 100 };
-        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(funds), 100), "reservoir");
-        assert_eq!(route_coinbase("other", None, Some("operator"), Some("reservoir"), Some(funds), 100), "other");
-        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(funds), 131), "operator");
+        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(funds), 100, (0, 0)), "reservoir");
+        assert_eq!(route_coinbase("other", None, Some("operator"), Some("reservoir"), Some(funds), 100, (0, 0)), "other");
+        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(funds), 131, (0, 0)), "operator");
         let full = crate::reservoir_funds::FundingSnapshot { mature_pradha: crate::emission_policy::floor_pradha(0), ..funds };
-        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(full), 100), "operator");
+        assert_eq!(route_coinbase("operator", None, Some("operator"), Some("reservoir"), Some(full), 100, (0, 0)), "operator");
     }
 
     #[test]

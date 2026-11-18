@@ -206,13 +206,14 @@ def run(probe, directory, check_http_framing=False):
             bridge = Child(args, work, env)
             wait_for(lambda: ready(bind), "HTTP did not start")
             claim = http(bind, "/api/faucet/claim", {"address": participant, "deviceId": f"recovery-{index}"}, split_body=check_http_framing)
-            assert claim.get("ok") and claim["rewardPradha"] == 1000, claim
+            assert claim.get("ok") and 100_000 <= claim["rewardPradha"] <= 500_000, claim
             if check_http_framing:
                 print("HTTP_FRAGMENTED_BODY_PASSED", flush=True)
                 return
             small = http(bind, "/api/faucet/withdraw", {"address": participant})
-            assert small.get("errorCode") == "SmallTransferNotSupported", small
-            check_ledger(ledger_path, participant, 1000)
+            assert small.get("minAmountPradha") == 2_500_000, small
+            assert "minimum withdrawal" in small.get("error", ""), small
+            check_ledger(ledger_path, participant, claim["rewardPradha"])
             assert read_json(journal_path)["pending"] is None
             bridge.kill()
             bridge = None
@@ -267,7 +268,10 @@ def run(probe, directory, check_http_framing=False):
             else:
                 assert blocked.get("errorCode") == "TransferPending", blocked
             duplicate_claim = http(bind, "/api/faucet/claim", {"address": participant, "deviceId": f"recovery-{index}"})
-            assert "error" in duplicate_claim, duplicate_claim
+            if "error" not in duplicate_claim:
+                diagnostic = http(bind, "/api/faucet/balance?address=" + urllib.parse.quote(participant))
+                status = http(bind, "/api/faucet/status")
+                raise AssertionError({"duplicateClaim": duplicate_claim, "balance": diagnostic, "status": status})
             if boundary != "before-clear":
                 replayed = read_json(journal_path)["pending"]
                 assert replayed["transaction_json"] == signed and replayed["transaction_id"] == txid

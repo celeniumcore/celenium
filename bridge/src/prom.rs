@@ -540,7 +540,12 @@ fn faucet_claim_response_at(
         "rewardPradha": entry.last_claim_payout_pradha,
         "claimedTodayPradha": entry.last_claim_reward_pradha,
         "dailyRewardPradha": entry.daily_reward_pradha,
-        "rewardModel": "daily-fixed",
+        "rewardModel": crate::reward_policy::REWARD_MODEL,
+        "minWithdrawPradha": crate::faucet::FAUCET_MIN_WITHDRAW_PRADHA,
+        "minRewardPradha": crate::reward_policy::reward_bounds(state.reward_month()).0,
+        "maxRewardPradha": crate::reward_policy::reward_bounds(state.reward_month()).1,
+        "rewardEmissionMonth": state.reward_month(),
+        "halvingIntervalMonths": crate::reward_policy::HALVING_MONTHS,
         "claimPeriodSecs": 86_400,
         "startedDrip": false,
         "serverTimeSecs": now,
@@ -564,7 +569,15 @@ async fn withdraw_response(body: &str) -> String {
     let journal_path = std::path::Path::new(crate::treasury::TREASURY_JOURNAL_PATH);
     let mut journal = match crate::treasury::TreasuryJournal::load(journal_path) {
         Ok(j) if j.can_prepare() => j,
-        _ => return serde_json::json!({"error":"reservoir transfer pending or journal needs recovery; retry later", "errorCode":"TransferPending"}).to_string(),
+        Ok(j) => {
+            let pending_txid = j.pending.as_ref().map(|p| p.transaction_id.clone());
+            return serde_json::json!({
+                "error":"reservoir transfer pending or journal needs recovery; retry later",
+                "errorCode":"TransferPending",
+                "pendingTxid": pending_txid,
+            }).to_string();
+        }
+        Err(_) => return serde_json::json!({"error":"reservoir transfer pending or journal needs recovery; retry later", "errorCode":"TransferPending"}).to_string(),
     };
 
     let v = match serde_json::from_str::<serde_json::Value>(body) {
@@ -896,11 +909,14 @@ async fn handle_http_request(
                     "reserveHorizonDays": crate::reservoir_funds::RESERVE_HORIZON_DAYS,
                     "treasury": crate::treasury::status(),
                     "rewardPradha": s.reward_pradha_today(),
-                    "maxRewardPradha": crate::faucet::FAUCET_MAX_REWARD_PRADHA,
+                    "minRewardPradha": s.reward_bounds_today().0,
+                    "maxRewardPradha": s.reward_bounds_today().1,
+                    "rewardEmissionMonth": s.reward_month(),
+                    "halvingIntervalMonths": crate::reward_policy::HALVING_MONTHS,
                     "claimPeriodSecs": 86_400,
-                    "rewardModel": "daily-fixed",
+                    "rewardModel": crate::reward_policy::REWARD_MODEL,
                     "dripDurationSecs": 0,
-                    "dripModel": "daily-fixed",
+                    "dripModel": "none",
                     "claimantsToday": s.claimants_today(),
                     "expectedClaimants": s.expected_claimants_today(),
                     "dailyCapPradha": daily_cap,
@@ -2312,23 +2328,23 @@ mod tests {
     }
 
     #[test]
-    fn faucet_claim_response_persists_fixed_daily_amount() {
+    fn faucet_claim_response_persists_dynamic_pool_amount() {
         let mut state = crate::faucet::FaucetState::default();
         let path = std::env::temp_dir().join(format!("faucet-api-{}.json", uuid::Uuid::new_v4()));
         let address = "cen69:qqh6qzvlczgp7nf7v7a0cwa9xqdskejse2575n7kwxa4vz778sarcqr5g90e6";
         let body = serde_json::json!({"address": address, "deviceId": "test-device"}).to_string();
         state.update_funding(250_000_000_000_000, 0, 1_794_789_000);
         let first = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000);
-        assert_eq!(first["rewardPradha"], 1000);
-        assert_eq!(first["balancePradha"], 1000);
+        assert_eq!(first["rewardPradha"], 500_000);
+        assert_eq!(first["balancePradha"], 500_000);
         assert_eq!(faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000)["errorCode"], "AlreadyClaimed");
         state.update_funding(250_000_000_000_000, 0, 1_794_789_000 + 86_400);
         let second = faucet_claim_response_at(&mut state, &body, &path, 1_794_789_000 + 86_400);
-        assert_eq!(second["rewardPradha"], 1000);
-        assert_eq!(second["claimedTodayPradha"], 1000);
-        assert_eq!(second["dailyRewardPradha"], 1000);
+        assert_eq!(second["rewardPradha"], 500_000);
+        assert_eq!(second["claimedTodayPradha"], 500_000);
+        assert_eq!(second["dailyRewardPradha"], 500_000);
         let loaded = crate::faucet::FaucetState::load(&path).unwrap();
-        assert_eq!(loaded.balance(address).unwrap().balance_pradha, 2000);
+        assert_eq!(loaded.balance(address).unwrap().balance_pradha, 1_000_000);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -2348,7 +2364,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn faucet_balance_http_exposes_fixed_daily_contract() {
+    async fn faucet_balance_http_exposes_dynamic_pool_contract() {
         let state = std::sync::Arc::new(std::sync::Mutex::new(crate::faucet::FaucetState::default()));
         state.lock().unwrap().update_funding(
             crate::emission_policy::TARGET_RESERVOIR_PRADHA,
@@ -2362,7 +2378,10 @@ mod tests {
         let response = send_request(mode.clone(), request).await;
         let body: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
         assert_eq!(body["claimPeriodSecs"], 86_400);
-        assert_eq!(body["rewardModel"], "daily-fixed");
+        assert_eq!(body["rewardModel"], crate::reward_policy::REWARD_MODEL);
+        assert!(body["minRewardPradha"].is_u64());
+        assert!(body["maxRewardPradha"].is_u64());
+        assert_eq!(body["halvingIntervalMonths"], crate::reward_policy::HALVING_MONTHS);
         assert_eq!(body["dripDurationSecs"], 0);
         assert!(body["dailyRewardPradha"].is_u64());
         assert!(body["serverTimeSecs"].is_u64());
@@ -2371,7 +2390,7 @@ mod tests {
         let response = send_request(mode.clone(), &encoded).await;
         let encoded_body: serde_json::Value = serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
         assert_eq!(encoded_body["address"], body["address"]);
-        assert_eq!(encoded_body["rewardModel"], "daily-fixed");
+        assert_eq!(encoded_body["rewardModel"], crate::reward_policy::REWARD_MODEL);
         let double_encoded = request.replace("cen69:", "cen69%253A");
         let response = send_request(mode.clone(), &double_encoded).await;
         assert!(response.contains("InvalidAddress"));
@@ -2398,7 +2417,7 @@ mod tests {
         assert_eq!(status["matureReservePradha"], 50_000_000_000_000_u64);
         assert_eq!(status["reserveTargetPradha"], 50_000_000_000_000_u64);
         assert_eq!(status["combinedEligibleFundingPradha"], 50_000_000_000_000_u64);
-        assert_eq!(status["rewardPradha"], 1000);
+        assert_eq!(status["rewardPradha"], 500_000);
         let response = send_request(mode, "POST /api/faucet/claim HTTP/1.1").await;
         assert!(response.contains("error"));
     }

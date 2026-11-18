@@ -34,7 +34,7 @@ pub struct FaucetFundingSnapshot {
 
 impl FaucetFundingSnapshot {
     pub fn combined(&self, now: u64, floor: u64, outstanding: u64) -> Option<FundingSnapshot> {
-        self.combined_with_service_reserve(now, floor, outstanding, service_reserve(1000))
+        self.combined_with_service_reserve(now, floor, outstanding, service_reserve(crate::reward_policy::INITIAL_MIN_REWARD_PRADHA))
     }
 
     pub fn combined_with_service_reserve(&self, now: u64, floor: u64, outstanding: u64, service: u64) -> Option<FundingSnapshot> {
@@ -96,7 +96,11 @@ pub fn available_for_claims(mature: u64, outstanding: u64) -> u64 {
 /// Funded schedules keep their quota; reserves sustain claims after emission stops.
 pub fn cash_daily_cap(mature: u64, outstanding: u64, scheduled_cap: u64) -> u64 {
     let free = available_for_claims(mature, outstanding);
-    free.min(scheduled_cap.max(free / RESERVE_HORIZON_DAYS).max(if free >= 1_000 { 1_000 } else { 0 }))
+    let minimum = crate::reward_policy::INITIAL_MIN_REWARD_PRADHA;
+    if free < minimum {
+        return 0;
+    }
+    free.min(scheduled_cap.max(free / RESERVE_HORIZON_DAYS).max(minimum))
 }
 
 pub fn protected_balance(floor: u64, outstanding: u64) -> u64 {
@@ -109,7 +113,9 @@ pub fn sweep_amount(mature: u64, floor: u64, outstanding: u64, fee: u64) -> u64 
 
 /// Include payouts and their fees in daily_spend; this reserve target never credits funds.
 pub fn service_reserve(daily_spend: u64) -> u64 {
-    daily_spend.max(1_000).saturating_mul(RESERVE_HORIZON_DAYS)
+    daily_spend
+        .max(crate::reward_policy::INITIAL_MIN_REWARD_PRADHA)
+        .saturating_mul(RESERVE_HORIZON_DAYS)
 }
 
 pub fn protected_balance_with_service_reserve(floor: u64, outstanding: u64, service_reserve: u64) -> u64 {
@@ -135,9 +141,9 @@ mod tests {
         let backup = 50_000_000_000_000;
         let operational = 200_000_200_000_000;
         let fee = 1000;
-        assert_eq!(sweep_amount_with_funding_sources(operational, backup, floor, 1000, service_reserve(1000), fee), 200_000_000 - fee);
-        assert_eq!(sweep_amount_with_funding_sources(200_000_000_000_000, backup, floor, 1000, service_reserve(1000), fee), 0);
-        assert_eq!(sweep_amount_with_funding_sources(300_000_000, 0, 0, 1000, service_reserve(1000), fee), 49_633_000);
+        assert_eq!(sweep_amount_with_funding_sources(operational, backup, floor, 1000, service_reserve(100_000), fee), 200_000_000 - fee);
+        assert_eq!(sweep_amount_with_funding_sources(200_000_000_000_000, backup, floor, 1000, service_reserve(100_000), fee), 0);
+        assert_eq!(sweep_amount_with_funding_sources(300_000_000, 0, 0, 1000, service_reserve(100_000), fee), 13_498_000);
     }
 
     #[test]
@@ -145,15 +151,15 @@ mod tests {
         let sources = FaucetFundingSnapshot {
             operational: FundingSnapshot { observed_at: 100, month: 816, ..Default::default() },
             reserve: Some(FundingSnapshot {
-                mature_pradha: OPERATIONAL_BUFFER_PRADHA + service_reserve(1000),
+                mature_pradha: OPERATIONAL_BUFFER_PRADHA + service_reserve(100_000),
                 observed_at: 100,
                 month: 816,
             }),
             reserve_configured: true,
         };
         let combined = sources.combined(100, 0, 0).unwrap();
-        assert_eq!(available_for_claims(combined.mature_pradha, 0), service_reserve(1000));
-        assert_eq!(cash_daily_cap(combined.mature_pradha, 0, 0), 1000);
+        assert_eq!(available_for_claims(combined.mature_pradha, 0), service_reserve(100_000));
+        assert_eq!(cash_daily_cap(combined.mature_pradha, 0, 0), 100_000);
     }
 
     #[test]
@@ -165,7 +171,7 @@ mod tests {
         };
         let combined = sources.combined(100, 250_000_000_000_000, 0).unwrap();
         assert_eq!(combined.mature_pradha, 50_000_000_000_000);
-        assert!(available_for_claims(combined.mature_pradha, 0) >= 1000);
+        assert!(available_for_claims(combined.mature_pradha, 0) >= 100_000);
         assert_eq!(sources.operational.mature_pradha, 0);
     }
 
@@ -201,7 +207,7 @@ mod tests {
     #[test]
     fn reduced_target_preserves_only_actual_legacy_backing() {
         let outstanding = 60_000_000_000_000;
-        let needed = outstanding + OPERATIONAL_BUFFER_PRADHA + service_reserve(1000);
+        let needed = outstanding + OPERATIONAL_BUFFER_PRADHA + service_reserve(100_000);
         let sources = FaucetFundingSnapshot {
             operational: FundingSnapshot { observed_at: 100, ..Default::default() },
             reserve: Some(FundingSnapshot { mature_pradha: needed + 1000, observed_at: 100, month: 0 }),
@@ -209,7 +215,7 @@ mod tests {
         };
         let combined = sources.combined(100, 0, outstanding).unwrap();
         assert_eq!(combined.mature_pradha, needed);
-        assert_eq!(available_for_claims(combined.mature_pradha, outstanding), service_reserve(1000));
+        assert_eq!(available_for_claims(combined.mature_pradha, outstanding), service_reserve(100_000));
         let mut short = sources;
         short.reserve.as_mut().unwrap().mature_pradha = 1000;
         assert_eq!(short.combined(100, 0, outstanding).unwrap().mature_pradha, 1000);
@@ -238,10 +244,10 @@ mod tests {
 
     #[test]
     fn end_emission_reserve_funds_a_fixed_claim_on_each_of_365_days() {
-        let mut free = service_reserve(1000);
+        let mut free = service_reserve(100_000);
         for day in 0..365 {
-            assert!(cash_daily_cap(OPERATIONAL_BUFFER_PRADHA + free, 0, 0) >= 1000, "day {day} still has {free} pradha");
-            free -= 1000;
+            assert!(cash_daily_cap(OPERATIONAL_BUFFER_PRADHA + free, 0, 0) >= 100_000, "day {day} still has {free} pradha");
+            free -= 100_000;
         }
         assert_eq!(cash_daily_cap(OPERATIONAL_BUFFER_PRADHA + free, 0, 0), 0);
     }
@@ -317,11 +323,11 @@ mod tests {
         let fee = 275;
         let reserve = service_reserve(0);
         let swept = sweep_amount_with_service_reserve(mature, 0, outstanding, reserve, fee);
-        assert_eq!(swept, 400_000_000 - 350_365_000 - 275);
+        assert_eq!(swept, 400_000_000 - 386_500_000 - 275);
         let retained = mature - swept - fee;
-        assert_eq!(retained, 350_365_000);
-        assert_eq!(available_for_claims(retained, outstanding), 365_000);
-        assert_eq!(cash_daily_cap(retained, outstanding, 0), 1_000);
+        assert_eq!(retained, 386_500_000);
+        assert_eq!(available_for_claims(retained, outstanding), 36_500_000);
+        assert_eq!(cash_daily_cap(retained, outstanding, 0), 100_000);
     }
 
     #[test]
@@ -348,11 +354,11 @@ mod tests {
     #[test]
     fn service_reserve_covers_a_year_of_at_least_one_daily_claim() {
         for (daily_spend, expected) in [
-            (0, 365_000),
-            (999, 365_000),
-            (1_000, 365_000),
-            (1_275, 465_375),
-            (10_000, 3_650_000),
+            (0, 36_500_000),
+            (999, 36_500_000),
+            (1_000, 36_500_000),
+            (1_275, 36_500_000),
+            (10_000, 36_500_000),
             (u64::MAX / 365, (u64::MAX / 365) * 365),
             (u64::MAX / 365 + 1, u64::MAX),
             (u64::MAX, u64::MAX),
@@ -409,11 +415,11 @@ mod tests {
         for (mature, outstanding, scheduled_cap, expected) in [
             (0, 0, 0, 0),
             (250_000_364, 0, 0, 0),
-            (250_000_365, 0, 0, 1),
-            (250_365_000, 0, 0, 1_000),
-            (350_365_000, 100_000_000, 0, 1_000),
-            (350_365_000, 100_000_000, 999, 1_000),
-            (350_365_000, 100_000_000, 1_001, 1_001),
+            (250_000_365, 0, 0, 0),
+            (250_100_000, 0, 0, 100_000),
+            (350_365_000, 100_000_000, 0, 100_000),
+            (350_365_000, 100_000_000, 999, 100_000),
+            (350_365_000, 100_000_000, 1_001, 100_000),
             (u64::MAX, 0, 0, (u64::MAX - 250_000_000) / 365),
         ] {
             assert_eq!(
@@ -430,9 +436,9 @@ mod tests {
             (0, 0, u64::MAX, 0),
             (250_000_000, 0, u64::MAX, 0),
             (300_000_000, 400_000_000, 1_000, 0),
-            (250_005_000, 0, 1_000, 1_000),
-            (250_005_000, 0, 10_000, 5_000),
-            (350_005_000, 100_000_000, 1_000, 1_000),
+            (250_005_000, 0, 1_000, 0),
+            (250_005_000, 0, 10_000, 0),
+            (350_005_000, 100_000_000, 1_000, 0),
             (u64::MAX, u64::MAX, u64::MAX, 0),
             (u64::MAX, 0, u64::MAX, u64::MAX - 250_000_000),
         ] {

@@ -31,6 +31,63 @@ use celenium_stratum_bridge::BridgeConfig;
 use cli::{Cli, NodeMode, apply_cli_overrides};
 use inprocess_node::InProcessNode;
 
+fn faucet_runtime_required(config: &BridgeConfig) -> bool {
+    !config.global.web_dashboard_port.is_empty()
+        || config.global.faucet_address.is_some()
+        || config.global.faucet_bootstrap_address.is_some()
+        || config.global.faucet_reserve_address.is_some()
+        || config.global.faucet_surplus_address.is_some()
+}
+
+#[cfg(test)]
+mod faucet_initialization_tests {
+    use super::*;
+
+    #[test]
+    fn faucet_address_initializes_without_dashboard() {
+        let mut config = BridgeConfig::default();
+        config.global.faucet_address = Some("reservoir".into());
+        assert!(faucet_runtime_required(&config));
+        assert!(config.global.web_dashboard_port.is_empty());
+    }
+
+    #[test]
+    fn bootstrap_configuration_initializes_without_dashboard() {
+        let mut config = BridgeConfig::default();
+        config.global.faucet_bootstrap_address = Some("operator".into());
+        assert!(faucet_runtime_required(&config));
+    }
+
+    #[test]
+    fn reserve_configuration_initializes_without_dashboard() {
+        let mut config = BridgeConfig::default();
+        config.global.faucet_reserve_address = Some("reserve".into());
+        assert!(faucet_runtime_required(&config));
+    }
+
+    #[test]
+    fn surplus_configuration_initializes_without_dashboard() {
+        let mut config = BridgeConfig::default();
+        config.global.faucet_surplus_address = Some("surplus".into());
+        assert!(faucet_runtime_required(&config));
+    }
+
+    #[test]
+    fn dashboard_only_keeps_ledger_initialization() {
+        let mut config = BridgeConfig::default();
+        config.global.web_dashboard_port = ":3030".into();
+        assert!(faucet_runtime_required(&config));
+    }
+
+    #[test]
+    fn plain_mining_does_not_initialize_faucet_files_or_signers() {
+        let mut config = BridgeConfig::default();
+        assert!(!faucet_runtime_required(&config));
+        config.global.pool_address = Some("pool".into());
+        assert!(!faucet_runtime_required(&config));
+    }
+}
+
 static CONFIG_LOADED_FROM: OnceLock<Option<PathBuf>> = OnceLock::new();
 static REQUESTED_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
@@ -289,7 +346,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create Celenium API client: {}", e))?;
 
-    if !config.global.web_dashboard_port.is_empty() {
+    if faucet_runtime_required(&config) {
         // Expose the shared API client to the dashboard so it can serve account
         // balances (`GET /api/balance`) over the existing HTTP channel instead of
         // opening a second node RPC connection from the app.
@@ -350,6 +407,9 @@ async fn main() -> Result<(), anyhow::Error> {
             config.global.faucet_surplus_address.clone(),
             shutdown_rx.clone(),
         )?;
+    }
+
+    if !config.global.web_dashboard_port.is_empty() {
         let web_dashboard_port = config.global.web_dashboard_port.clone();
         tokio::spawn(async move {
             if let Err(e) = prom::start_web_server_all(&web_dashboard_port).await {

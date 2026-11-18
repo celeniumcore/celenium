@@ -1,18 +1,18 @@
-# Klaim 1.000 pradha dan transaksi kecil
+# Klaim pool dan transaksi kecil
 
 Perubahan setelah rilis drip `06a9ad1`. Klaim dan pembentuk transaksi diuji pada source, serta transfer kecil dibuktikan pada simnet dengan override eksplisit. Aturan transaksi kecil belum aktif di mainnet. Tes gabungan consensus-core dan bridge: 285 lulus; suite aplikasi snapshot commit: 194 lulus. Tes modul faucet/emission_policy terpisah: 52 lulus.
 
 ## Permintaan dan perilaku
 
 - Tombol klaim tetap dapat ditekan untuk meminta klaim atau melihat alasan server. Hanya permintaan yang sedang diproses yang menahan tap ganda.
-- Kuota 1.000 pradha per alamat per hari UTC. Klaim langsung mengkredit kuota tanpa menunggu akrual intrahari.
+- Reward pool berada pada rentang 100.000–500.000 pradha pada era awal dan dibagi dua setiap 48 bulan. Kuota dibekukan per hari dari dana matang dan peserta hari sebelumnya.
 - Klaim ulang hari yang sama tidak mengkredit lagi. Batas perangkat, anggaran harian, kewajiban ledger, dan penyimpanan tetap berlaku.
-- Migrasi saldo drip hari ini menambah selisih sampai 1.000 pradha. Sisa kuota hari aktif sebelumnya dipertahankan. Saldo legacy yang sudah dibayar penuh tidak dibayar ulang.
+- Migrasi saldo lama mempertahankan kuota yang sudah tercatat pada hari aktif. Saldo legacy yang sudah dibayar penuh tidak dibayar ulang.
 - Penarikan tetap memakai dana reservoir on-chain dan membayar fee dari reservoir.
 
 ## Bukti masalah penarikan pada aturan sekarang
 
-Probe simnet menunjukkan payout 1.000 pradha dari satu UTXO coinbase ditolak storage mass 1.000.000.295 > 500.000. Fee 275 juga di bawah minimum transaksi satu-input/two-output yang diukur (509 pradha). Menaikkan fee menjadi 10.000 tidak menyelesaikan penolakan storage mass.
+Probe simnet menunjukkan payout 100.000 dan 500.000 pradha dari satu UTXO besar masih ditolak storage mass standar, sedangkan payout minimum akumulasi 2.500.000 pradha lolos dengan fee 509 pradha. Output kecil tetap perlu dikumpulkan sebelum penarikan.
 
 Pembentuk transaksi sekarang memilih UTXO berdasarkan saldo, maturity jaringan dan massa signed transaction; tidak membuat change bernilai nol; menghitung fee dari transaksi yang benar-benar dikirim. Fee transaksi pengguna tidak dinaikkan diam-diam. Faucet menyiapkan transaksi terlebih dahulu untuk memeriksa anggaran fee, kemudian mengirim transaksi yang sama.
 
@@ -20,7 +20,7 @@ Pembentuk transaksi sekarang memilih UTXO berdasarkan saldo, maturity jaringan d
 
 Perubahan massa storage dapat mengubah validitas transaksi dan blok. Implementasi eksperimen harus opt-in pada jaringan lokal, dengan default semua jaringan tetap sama. Jangan reset genesis, mengganti supply, atau mengaktifkannya sepihak di mainnet. Saldo dan nominal output tetap dalam pradha, tidak dibulatkan untuk membuat transaksi lolos.
 
-Gerbang aktivasi: uji transfer 1.000 pradha sampai UTXO penerima terkonfirmasi, uji massa/default legacy, batas sumber daya dan spam, parameter konsisten antarnode, mekanisme aktivasi terjadwal, upgrade wallet, backup dan rollback yang kompatibel. Satu node yang menerima transaksi tidak membuktikan peer lama akan menerimanya.
+Gerbang aktivasi: uji transfer pool 2.500.000 pradha sampai UTXO penerima terkonfirmasi, uji massa/default legacy, batas sumber daya dan spam, parameter konsisten antarnode, mekanisme aktivasi terjadwal, upgrade wallet, backup dan rollback yang kompatibel. Satu node yang menerima transaksi tidak membuktikan peer lama akan menerimanya.
 
 ## Bukti pembayaran simnet
 

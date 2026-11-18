@@ -151,9 +151,10 @@ blok langsung masuk ke coinbase atas alamat wallet yang dipasang.
 
 CPU (desktop maupun ponsel) tidak kompetitif melawan ASIC/GPU di mainnet,
 sehingga mining ponsel tidak dapat menjadi sumber penghasilan yang berarti.
-Untuk menjaga partisipasi tetap hidup, Celenium menyalurkan "rewards
-partisipasi" — pembayaran harian kecil (dasar 1000 pradha/hari/perangkat ≈
-0,00001 CEN) yang didanai dari **potongan reward blok**, bukan dari premine,
+untuk menjaga partisipasi tetap hidup, Celenium menyalurkan "rewards
+partisipasi" — pembayaran harian berbasis pool (100.000–500.000 pradha pada
+era awal, dengan batas yang dibagi dua setiap empat tahun nominal) yang didanai
+dari **potongan reward blok**, bukan dari premine,
 lewat reservoir dinamis yang menyeimbangkan diri:
 
 - Bootstrap: miner inisial operator mengarahkan coinbase ke wallet reservoir,

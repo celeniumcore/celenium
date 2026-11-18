@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 pub mod app_config;
 pub mod celeniumapi;
 pub mod client_handler;
@@ -18,6 +20,7 @@ pub mod pplns;
 pub mod prom;
 pub mod reservoir;
 pub mod reservoir_funds;
+pub mod reward_policy;
 #[cfg(feature = "rkstratum_cpu_miner")]
 pub mod rkstratum_cpu_miner;
 pub mod share_handler;

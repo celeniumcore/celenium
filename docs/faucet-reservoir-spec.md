@@ -39,13 +39,13 @@ harus diprediksi, dan tanpa CEN yang menganggur.
 
 | Parameter | Default | Keterangan |
 |---|---|---|
-| Reward dasar | 1000 pradha (0,00001 CEN) / hari / perangkat | dibayar saat klaim lolos |
-| Cap anggaran harian | 250 CEN | batas total klaim per hari |
-| Target reservoir | 7500 CEN (= 30 hari × cap) | level ideal cadangan |
+| Reward harian | 100.000–500.000 pradha pada era awal | dibagi dari pool berdasarkan dana dan peserta; batas dibagi dua tiap 48 bulan |
+| Pool harian | mengikuti dana matang dan emisi | tanpa kredit parsial jika batas minimum 100.000 pradha tidak tercapai |
+| Target reservoir | floor dinamis berbasis sisa emisi | level perlindungan dan akumulasi |
 | Hysteresis | 80% / 120% target (6000 / 9000 CEN) | cegah osilasi potongan |
 | Potongan reward blok | 0–1,5% variabel | aktif hanya saat di bawah target |
 | Klaim | 1× / hari / perangkat | — |
-| Ambang penarikan | 100000 pradha (0,001 CEN) | di atas fee transfer (~25000 pradha) |
+| Ambang penarikan | 2.500.000 pradha (0,025 CEN) | akumulasi untuk melewati storage mass standar |
 | Anti-sybil | atestasi perangkat + 1 klaim/hari | KYC opsional untuk tarik besar |
 
 Semua angka di atas merupakan default yang bisa digeser tanpa perubahan
@@ -59,9 +59,11 @@ konsensus (murni kebijakan operator pool/miner).
 2. **Top-up (berkelanjutan):** tiap blok, potongan 0–1,5% dialirkan ke
    reservoir bila cadangan di bawah target; 0% bila di atas ambang atas.
 3. **Klaim harian:** perangkat membuktikan identitas (Keystore) → server
-   mengecek "sudah klaim hari ini?" → kredit 1000 pradha ke ledger off-chain.
-4. **Cap:** jika total klaim hari itu × 1000 pradha > 250 CEN, tiap klaim
-   dibagi rata sesuai cap (reward per klaim menyusut).
+   mengecek "sudah klaim hari ini?" → kredit jatah pool yang sudah dibekukan
+   ke ledger off-chain.
+4. **Pool:** server membekukan kuota harian dari dana matang dan peserta hari
+   sebelumnya. Klaim baru ditolak tanpa kredit parsial jika batas minimum tidak
+   tercapai.
 5. **Overflow:** reservoir di atas ambang atas → potongan reward blok = 0%,
    kelebihan otomatis tetap di tangan miner.
 

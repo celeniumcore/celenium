@@ -47,10 +47,11 @@ example child, bukan startup CLI lengkap `stratum-bridge`.
 
 Setiap skenario memakai cwd ledger/journal sendiri dan alamat penerima berbeda.
 Wallet operasional kosong; payout memakai reserve genesis simnet. HTTP claim
-memberi peserta lain 1.000 pradha. Withdrawal nominal itu harus menghasilkan
-`SmallTransferNotSupported` dan mempertahankan saldo ledger serta journal kosong.
+memberi peserta lain reward pool dinamis. Withdrawal sebesar reward pool harus menghasilkan
+`SmallTransferNotSupported` sampai saldo terkumpul mencapai minimum standar,
+dan mempertahankan saldo ledger serta journal kosong.
 Payout yang berhasil memakai **kewajiban ledger lama 1 CEN**. Fixture ini tidak
-mengubah reward harian dan tidak membuktikan payout 1.000 pradha di mainnet.
+mengubah reward harian dan tidak membuktikan payout pool dinamis di mainnet.
 
 Skrip mengompilasi interposer C ke sandbox, lalu memberi `LD_PRELOAD` hanya pada
 proses bridge yang akan dimatikan. Tidak ada fault hook baru di source runtime

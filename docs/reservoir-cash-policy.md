@@ -34,12 +34,12 @@ pada API faucet dan treasury memakai snapshot node.
 - Kewajiban ledger lama di atas plafon tetap utuh; sistem tidak menghapus atau memotong hak yang sudah tercatat.
 - Dana bebas = saldo matang dikurangi kewajiban dan buffer biaya 2,5 CEN.
 - Anggaran harian = minimum dana bebas dengan maksimum batas emisi legacy,
-  dana bebas / 365, dan satu klaim tetap bila dana bebas mencukupi 1.000 pradha.
+  dana bebas / 365, dan batas minimum reward pool bila dana bebas mencukupi.
   Anggaran ditetapkan per hari UTC dan disimpan bersama ledger;
   refresh saldo tidak terus menaikkan anggaran untuk hari yang sama.
-- Kuota klaim tetap 1.000 pradha per alamat per hari. Bila dana atau kuota harian
-  tidak cukup, klaim ditolak tanpa kredit parsial. Perubahan ini tidak menaikkan
-  nominal reward.
+- Kuota klaim dibagi dari pool harian. Batas awal 100.000–500.000 pradha dibagi
+  dua setiap 48 bulan; bila dana atau batas minimum tidak cukup, klaim ditolak
+  tanpa kredit parsial.
 - Setelah subsidi berhenti, cadangan nyata masih dapat membiayai klaim. Tidak ada
   janji pendanaan abadi: tanpa pendapatan baru, klaim akhirnya berhenti saat dana
   bebas tidak cukup.
@@ -75,7 +75,7 @@ Dana terlindungi = maksimum floor dengan jumlah berikut:
 - hak klaim ledger yang belum dibayar;
 - buffer biaya operasional 2,5 CEN;
 - cadangan layanan 365 × maksimum pengeluaran harian yang tercatat, setidaknya
-  1.000 pradha per hari.
+  100.000 pradha per hari selama era reward awal.
 
 Puncak pengeluaran disimpan dalam ledger agar pergantian hari atau restart tidak
 langsung mengurangi cadangan. Biaya transaksi surplus dicadangkan sebelum kirim.

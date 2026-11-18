@@ -133,16 +133,17 @@ async fn exercise(directory: &Path) -> Result<()> {
             })?;
             let state = Mutex::new(serde_json::from_value::<FaucetState>(value)?);
             faucet_funding::refresh(&api, &state, &operational.to_string(), Some(&reserve.to_string())).await?;
-            ensure!(state.lock().unwrap().claim(&participant.to_string(), "simnet-participant")?.balance_pradha == 1000);
+            let claimed = state.lock().unwrap().claim(&participant.to_string(), "simnet-participant")?.balance_pradha;
+            ensure!((100_000..=500_000).contains(&claimed));
             let reserve_signer = FaucetSigner::from_secret_hex_for_network(hex::encode(reserve_key), Prefix::Simnet)?;
             let small = faucet_funding::prepare_withdrawal(
                 &api, &state, &operational.to_string(), None,
-                Some((&reserve.to_string(), &reserve_signer)), &participant.to_string(), 1000, None,
+                Some((&reserve.to_string(), &reserve_signer)), &participant.to_string(), claimed, None,
             ).await;
             let error = small.expect_err("standard storage mass unexpectedly accepted a 1000-pradha payout");
             ensure!(error.to_string().contains("SmallTransferNotSupported"));
-            ensure!(state.lock().unwrap().balance(&participant.to_string()).unwrap().balance_pradha == 1000);
-            println!("SMALL_PAYOUT_BLOCKED amount=1000 ledger_preserved=true reason={error:#}");
+            ensure!(state.lock().unwrap().balance(&participant.to_string()).unwrap().balance_pradha == claimed);
+            println!("SMALL_PAYOUT_BLOCKED amount={claimed} ledger_preserved=true reason={error:#}");
             let (source, transfer) = faucet_funding::prepare_withdrawal(
                 &api, &state, &operational.to_string(), None,
                 Some((&reserve.to_string(), &reserve_signer)), &recipient.to_string(), amount, None,
@@ -209,7 +210,7 @@ async fn exercise(directory: &Path) -> Result<()> {
             restored.last_txid = Some(txid.clone());
             restored.save(journal_path)?;
             faucet_funding::refresh(&api, &state, &operational.to_string(), Some(&reserve.to_string())).await?;
-            println!("RESERVE_FAUCET_REPLAY same_tx=true duplicate_payment=false recipient_spent=true ledger_restart=true remaining_claims=1000 fee_debited_once=true no_worker_connected=true");
+            println!("RESERVE_FAUCET_REPLAY same_tx=true duplicate_payment=false recipient_spent=true ledger_restart=true remaining_claims=dynamic fee_debited_once=true no_worker_connected=true");
             let template = client.get_block_template(miner.clone(), vec![]).await?;
             let payload = &template.block.transactions.first().context("coinbase missing")?.payload;
             ensure!(payload.len() >= 16);

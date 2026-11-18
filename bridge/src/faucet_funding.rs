@@ -36,6 +36,12 @@ pub async fn refresh(
     ensure!(!state.storage_uncertain, "faucet ledger requires recovery");
     state.set_funding_address(operational)?;
     ensure!(state.update_funding_sources(funds, FaucetState::now_secs()), "faucet funding snapshot is stale or incomplete");
+    if state.funding_snapshot_dirty {
+        if let Err(error) = state.save(std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH)) {
+            state.storage_uncertain = true;
+            return Err(error).context("cannot persist the daily funding budget");
+        }
+    }
     Ok(funds)
 }
 
