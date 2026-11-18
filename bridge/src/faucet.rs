@@ -26,8 +26,8 @@ pub const FAUCET_WITHDRAW_COOLDOWN_SECS: u64 = 3_600;
 /// pernah membayar lebih dari plafon ini untuk biaya transaksi per hari.
 pub const FAUCET_DAILY_FEE_BUDGET_PRADHA: u64 = 250_000_000;
 
-/// Accumulation avoids outputs below the standard storage-mass limit.
-pub const FAUCET_MIN_WITHDRAW_PRADHA: u64 = 2_500_000;
+/// Quotes enforce transaction mass; claims do not require an accumulation threshold.
+pub const FAUCET_MIN_WITHDRAW_PRADHA: u64 = 1;
 
 pub const FAUCET_MIN_REWARD_PRADHA: u64 = crate::reward_policy::INITIAL_MIN_REWARD_PRADHA;
 
@@ -51,6 +51,14 @@ pub struct FaucetEntry {
     /// Detik Unix penarikan on-chain terakhir (0 bila belum pernah).
     #[serde(default)]
     pub last_withdraw_secs: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PayoutReceipt {
+    pub txid: String,
+    pub amount_pradha: u64,
+    pub fee_pradha: u64,
+    pub day: u64,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -102,6 +110,8 @@ pub struct FaucetState {
     funding_reward_month: u64,
     #[serde(default)]
     funding_expected_claimants: u64,
+    #[serde(default)]
+    payout_receipts: HashMap<String, PayoutReceipt>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -328,6 +338,9 @@ impl FaucetState {
             "canStartDrip": false,
             "serverTimeSecs": now,
             "claimPeriodSecs": DAY_SECS,
+            "claimPayoutMode": "on-chain",
+            "lastPayoutTxid": self.payout_receipts.get(address).map(|receipt| &receipt.txid),
+            "lastPayoutStatus": self.payout_receipts.get(address).map(|_| "submitted"),
             "rewardModel": crate::reward_policy::REWARD_MODEL,
             "minRewardPradha": self.reward_bounds_today().0,
             "maxRewardPradha": self.reward_bounds_today().1,
@@ -475,7 +488,17 @@ impl FaucetState {
             return false;
         }
         self.settled_withdrawal_txids.insert(txid.into());
+        self.payout_receipts.insert(
+            address.into(),
+            PayoutReceipt { txid: txid.into(), amount_pradha: amount, fee_pradha: fee, day: Self::current_day() },
+        );
         true
+    }
+
+    pub fn paid_claim_receipt(&self, address: &str, now: u64) -> Option<&PayoutReceipt> {
+        let entry = self.ledger.get(address)?;
+        let receipt = self.payout_receipts.get(address)?;
+        (receipt.day == now / DAY_SECS && entry.last_claim_day == now / DAY_SECS && entry.balance_pradha == 0).then_some(receipt)
     }
 
     pub fn debit(&mut self, address: &str, amount_pradha: u64) -> bool {
@@ -1321,10 +1344,29 @@ mod tests {
     }
 
     #[test]
-    fn minimum_withdraw_is_reachable_by_accumulating_claims() {
-        assert_eq!(FAUCET_MIN_WITHDRAW_PRADHA, 2_500_000);
-        assert_eq!(FAUCET_MIN_WITHDRAW_PRADHA.div_ceil(FAUCET_MAX_REWARD_PRADHA), 5);
-        assert_eq!(FAUCET_MIN_WITHDRAW_PRADHA.div_ceil(FAUCET_MIN_REWARD_PRADHA), 25);
+    fn direct_payout_has_no_accumulation_threshold() {
+        assert_eq!(FAUCET_MIN_WITHDRAW_PRADHA, 1);
+        assert!(FAUCET_MIN_REWARD_PRADHA >= FAUCET_MIN_WITHDRAW_PRADHA);
+    }
+
+    #[test]
+    fn submitted_claim_receipt_survives_reload_and_settlement_is_idempotent() {
+        let mut state = funded_state();
+        let now = FaucetState::now_secs();
+        state.claim_at(ADDR, "receipt-device", now).unwrap();
+        let amount = state.balance(ADDR).unwrap().balance_pradha;
+        let txid = "a".repeat(64);
+        assert!(state.settle_withdrawal(&txid, ADDR, amount, 509));
+        let fee = state.fees_today();
+        assert!(state.settle_withdrawal(&txid, ADDR, amount, 509));
+        assert_eq!(state.fees_today(), fee);
+        let restored: FaucetState = serde_json::from_value(serde_json::to_value(&state).unwrap()).unwrap();
+        let receipt = restored.paid_claim_receipt(ADDR, now).unwrap();
+        assert_eq!(receipt.txid, txid);
+        assert_eq!(receipt.amount_pradha, amount);
+        assert_eq!(restored.balance(ADDR).unwrap().balance_pradha, 0);
+        assert!(restored.paid_claim_receipt(ADDR, now + DAY_SECS).is_none());
+        assert!(restored.paid_claim_receipt("another-address", now).is_none());
     }
 
     #[test]

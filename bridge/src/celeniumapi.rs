@@ -955,7 +955,14 @@ impl CeleniumApi {
             )
             .await
             .context("get_mempool_entries failed")?;
-        Ok(mempool_spent_outpoints(response.mempool_entries))
+        let mut spent = mempool_spent_outpoints(response.mempool_entries);
+        let journal = crate::treasury::TreasuryJournal::load(std::path::Path::new(crate::treasury::TREASURY_JOURNAL_PATH))
+            .context("cannot read reservoir transfer reservations")?;
+        for pending in journal.pending.iter().chain(journal.submitted.iter()) {
+            let transaction = journaled_transaction(pending)?;
+            spent.extend(transaction.inputs.into_iter().map(|input| input.previous_outpoint));
+        }
+        Ok(spent)
     }
 
     async fn unspent_address_entries(&self, source: &Address) -> Result<Vec<celenium_rpc_core::RpcUtxosByAddressesEntry>> {

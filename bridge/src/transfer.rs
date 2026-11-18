@@ -110,6 +110,9 @@ pub(crate) fn build_transfer(
     let mut total = 0u64;
     let mut insufficient_fee = None;
     let mut storage_rejected = false;
+    let mut utxos = utxos;
+    // Small inputs offset a small payment's storage mass; large inputs must not poison selection first.
+    utxos.sort_by_key(|(_, entry)| entry.amount);
     for (outpoint, entry) in utxos {
         if entry.script_public_key != source_script || entry.amount == 0 || entry.covenant_id.is_some() {
             continue;
@@ -489,6 +492,20 @@ mod tests {
             let quote = PreparedTransfer::new(signed, &params).unwrap();
             assert_eq!(quote.fee_pradha(), 509);
         }
+    }
+
+    #[test]
+    fn mixed_funding_selects_ordinary_inputs_before_consolidated_reserve() {
+        let (source, secret) = wallet(1);
+        let (dest, _) = wallet(2);
+        let mut amounts = vec![50_000_000_000_000];
+        amounts.extend(std::iter::repeat_n(2_079_547, 24));
+        let signed =
+            build_transfer(&SIMNET_PARAMS, 1, &source, &dest, 100_000, None, 0.25, &secret, inputs(&source, &amounts)).unwrap();
+        assert_eq!(signed.tx.outputs[0].value, 100_000);
+        assert_eq!(signed.tx.inputs.len(), 20);
+        assert!(signed.entries.iter().all(|entry| entry.as_ref().unwrap().amount == 2_079_547));
+        sign::verify(&signed.as_verifiable()).unwrap();
     }
 
     #[test]

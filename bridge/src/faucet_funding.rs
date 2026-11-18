@@ -128,6 +128,73 @@ pub async fn prepare_withdrawal(
     Err(last_error)
 }
 
+/// Signs a candidate claim without persisting its new credit or broadcasting.
+#[allow(clippy::too_many_arguments)]
+pub async fn prepare_claim_payment(
+    api: &CeleniumApi,
+    state: &FaucetState,
+    operational: &str,
+    operational_signer: Option<&FaucetSigner>,
+    reserve: Option<(&str, &FaucetSigner)>,
+    destination: &str,
+    amount: u64,
+) -> Result<(PayoutSource, crate::transfer::PreparedTransfer)> {
+    validate_addresses(operational, reserve.map(|(address, _)| address))?;
+    let target = Address::try_from(destination)?;
+    ensure!(target.to_string() == destination && target.prefix == Address::try_from(operational)?.prefix, "claim network mismatch");
+    ensure!(
+        destination != operational && reserve.is_none_or(|(address, _)| destination != address),
+        "cannot claim to a funding source"
+    );
+    state.check_withdraw(destination)?;
+    ensure!(
+        amount > 0 && amount <= state.balance(destination).map(|entry| entry.balance_pradha).unwrap_or(0),
+        "claim exceeds balance"
+    );
+    let now = FaucetState::now_secs();
+    let funds = state.funding_sources.context("FundingUnavailable: no verified source snapshot")?;
+    let combined = state.funding.filter(|funding| funding.is_fresh(now)).context("FundingUnavailable: expired funding")?;
+    let mut last = anyhow::anyhow!("FundingUnavailable: no funded signer covers this claim");
+    for (source, address, signer, mature) in [
+        (PayoutSource::Operational, operational, operational_signer, funds.operational.mature_pradha),
+        (
+            PayoutSource::Reserve,
+            reserve.map(|(address, _)| address).unwrap_or(""),
+            reserve.map(|(_, signer)| signer),
+            funds.reserve.map(|funding| funding.mature_pradha).unwrap_or(0),
+        ),
+    ] {
+        let Some(signer) = signer else { continue };
+        signer.ensure_matches(address)?;
+        if mature <= amount {
+            continue;
+        }
+        let quote = match api.prepare_transfer(address, destination, amount, signer.secret_hex()).await {
+            Ok(quote) => quote,
+            Err(error) => {
+                last = error;
+                continue;
+            }
+        };
+        let fee = quote.fee_pradha();
+        state.check_withdraw_fee(destination, fee)?;
+        let selected = select_withdrawal_source(
+            (source == PayoutSource::Operational).then_some(fee),
+            (source == PayoutSource::Reserve).then_some(fee),
+            amount,
+            state.total_outstanding(),
+            funds.operational.mature_pradha,
+            combined.mature_pradha.saturating_sub(funds.operational.mature_pradha),
+            combined.mature_pradha,
+        );
+        if selected == Some(source) {
+            ensure!(combined.is_fresh(FaucetState::now_secs()), "FundingUnavailable: funding expired during quote");
+            return Ok((source, quote));
+        }
+    }
+    Err(last)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

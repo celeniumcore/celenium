@@ -476,6 +476,7 @@ pub fn faucet_address() -> Option<String> {
 /// each send a full payout.
 pub(crate) static FAUCET_WITHDRAW_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+#[cfg(test)]
 async fn refresh_faucet_funding() {
     let Some(state) = FAUCET_STATE.get() else { return };
     state.lock().unwrap().invalidate_funding();
@@ -503,6 +504,7 @@ async fn send_response(
     Ok(())
 }
 
+#[cfg(test)]
 fn faucet_claim_response_at(
     state: &mut crate::faucet::FaucetState,
     body: &str,
@@ -550,6 +552,176 @@ fn faucet_claim_response_at(
         "startedDrip": false,
         "serverTimeSecs": now,
     })
+}
+
+fn direct_claim_error(code: &str, message: impl ToString) -> serde_json::Value {
+    serde_json::json!({"ok": false, "errorCode": code, "error": message.to_string(), "claimPayoutMode": "on-chain"})
+}
+
+fn direct_claim_receipt(
+    state: &crate::faucet::FaucetState,
+    address: &str,
+    receipt: &crate::faucet::PayoutReceipt,
+    reward: u64,
+) -> serde_json::Value {
+    let mut response = state.balance_response(address, crate::faucet::FaucetState::now_secs());
+    response["ok"] = true.into();
+    response["payoutStatus"] = "submitted".into();
+    response["txid"] = receipt.txid.clone().into();
+    response["paidPradha"] = receipt.amount_pradha.into();
+    response["feePradha"] = receipt.fee_pradha.into();
+    response["rewardPradha"] = reward.into();
+    response
+}
+
+async fn direct_claim_response(body: &str) -> serde_json::Value {
+    let _guard = FAUCET_WITHDRAW_LOCK.lock().await;
+    let request: serde_json::Value = match serde_json::from_str(body) {
+        Ok(value) => value,
+        Err(_) => return direct_claim_error("InvalidRequest", "invalid JSON body"),
+    };
+    let address = request.get("address").and_then(|value| value.as_str()).unwrap_or("");
+    let device = request.get("deviceId").and_then(|value| value.as_str()).unwrap_or("");
+    if let Err(error) = crate::faucet::FaucetState::validate_address(address) {
+        return direct_claim_error(error.code(), error);
+    }
+    let Some(state) = FAUCET_STATE.get() else {
+        return direct_claim_error("NotConfigured", "faucet is not ready");
+    };
+    let now = crate::faucet::FaucetState::now_secs();
+    {
+        let state = state.lock().unwrap();
+        if state.storage_uncertain {
+            return direct_claim_error("StorageUnavailable", "faucet storage needs recovery");
+        }
+        if let Some(receipt) = state.paid_claim_receipt(address, now) {
+            return direct_claim_receipt(&state, address, receipt, 0);
+        }
+    }
+    let journal_path = std::path::Path::new(crate::treasury::TREASURY_JOURNAL_PATH);
+    let mut journal = match crate::treasury::TreasuryJournal::load(journal_path) {
+        Ok(journal) => journal,
+        Err(_) => return direct_claim_error("StorageUnavailable", "transfer journal needs recovery"),
+    };
+    if let Some(pending) = &journal.pending {
+        let mut response = direct_claim_error("TransferPending", "a reservoir transaction is awaiting reconciliation; retry later");
+        response["payoutStatus"] = "pending".into();
+        if pending.withdrawal && pending.destination == address {
+            response["pendingTxid"] = pending.transaction_id.clone().into();
+        }
+        return response;
+    }
+    if !journal.can_prepare() {
+        return direct_claim_error("TransferPending", "reservoir transaction queue is full; retry after confirmation");
+    }
+    let Some(api) = NODE_API.get() else {
+        return direct_claim_error("NodeUnavailable", "node is not ready");
+    };
+    let Some(operational) = FAUCET_PAYOUT_ADDRESS.get().and_then(|address| address.as_deref()) else {
+        return direct_claim_error("NotConfigured", "faucet payout address is not configured");
+    };
+    let signer = FAUCET_SIGNER.get().and_then(|signer| signer.as_deref());
+    let reserve = FAUCET_RESERVE.get().map(|(address, signer)| (address.as_str(), signer.as_ref()));
+    if signer.is_none() && reserve.is_none() {
+        return direct_claim_error("NotConfigured", "faucet signer is not configured");
+    }
+    if let Err(error) = crate::faucet_funding::refresh(api, state, operational, reserve.map(|(address, _)| address)).await {
+        return direct_claim_error("FundingUnavailable", error);
+    }
+    let mut candidate = state.lock().unwrap().clone();
+    let reward = match candidate.claim_at(address, device, now) {
+        Ok(entry) => entry.last_claim_payout_pradha,
+        Err(
+            crate::faucet::ClaimError::AlreadyClaimed
+            | crate::faucet::ClaimError::FundingUnavailable
+            | crate::faucet::ClaimError::DailyCapReached
+            | crate::faucet::ClaimError::ReservoirFull,
+        ) if candidate.balance(address).is_some_and(|entry| entry.balance_pradha > 0) => 0,
+        Err(error) => return direct_claim_error(error.code(), error),
+    };
+    let amount = candidate.balance(address).map(|entry| entry.balance_pradha).unwrap_or(0);
+    let (source, prepared) =
+        match crate::faucet_funding::prepare_claim_payment(api, &candidate, operational, signer, reserve, address, amount).await {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                let message = format!("{error:#}");
+                let code = if message.contains("SmallTransferNotSupported") {
+                    "SmallTransferNotSupported"
+                } else if message.contains("FundingUnavailable") {
+                    "FundingUnavailable"
+                } else {
+                    "TransferPreparationFailed"
+                };
+                return direct_claim_error(code, message);
+            }
+        };
+    let source = match source {
+        crate::reservoir_funds::PayoutSource::Operational => operational,
+        crate::reservoir_funds::PayoutSource::Reserve => reserve.unwrap().0,
+    };
+    let transaction_json = match prepared.transaction_json() {
+        Ok(transaction) => transaction,
+        Err(_) => return direct_claim_error("TransferPreparationFailed", "cannot encode transaction"),
+    };
+    let anchor = match api.transfer_anchor().await {
+        Ok(anchor) => anchor,
+        Err(_) => return direct_claim_error("NodeUnavailable", "cannot read transaction anchor"),
+    };
+    let txid = prepared.transaction_id().to_string();
+    let fee = prepared.fee_pradha();
+    if let Err(error) = candidate.save(std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH)) {
+        if candidate.storage_uncertain {
+            *state.lock().unwrap() = candidate;
+        }
+        return direct_claim_error("StorageUnavailable", error);
+    }
+    *state.lock().unwrap() = candidate;
+    journal.pending = Some(crate::treasury::PendingTransfer {
+        transaction_json,
+        transaction_id: txid.clone(),
+        amount_pradha: amount,
+        fee_pradha: fee,
+        source: source.into(),
+        destination: address.into(),
+        network: prepared.network_id.to_string(),
+        withdrawal: true,
+        anchor: Some(anchor),
+        input_entries: prepared.input_entries(),
+    });
+    if let Err(error) = journal.save(journal_path) {
+        state.lock().unwrap().storage_uncertain = true;
+        return direct_claim_error("StorageUnavailable", error);
+    }
+    state.lock().unwrap().invalidate_funding();
+    if let Err(error) = api.submit_prepared_transfer(prepared).await {
+        let mut response = direct_claim_error("TransferPending", format!("submission status is uncertain: {error:#}"));
+        response["payoutStatus"] = "pending".into();
+        response["pendingTxid"] = txid.into();
+        return response;
+    }
+    let mut state = state.lock().unwrap();
+    if !state.settle_withdrawal(&txid, address, amount, fee) {
+        state.storage_uncertain = true;
+        let mut response = direct_claim_error("StorageUnavailable", "transaction submitted; ledger needs recovery");
+        response["payoutStatus"] = "pending".into();
+        response["pendingTxid"] = txid.clone().into();
+        response["txid"] = txid.into();
+        return response;
+    }
+    if let Err(error) = state.save(std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH)) {
+        state.storage_uncertain = true;
+        let mut response = direct_claim_error("StorageUnavailable", error);
+        response["txid"] = txid.into();
+        return response;
+    }
+    if let Err(error) = journal.record_submitted().and_then(|_| journal.save(journal_path).map_err(Into::into)) {
+        state.storage_uncertain = true;
+        let mut response = direct_claim_error("StorageUnavailable", error);
+        response["txid"] = txid.into();
+        return response;
+    }
+    let receipt = crate::faucet::PayoutReceipt { txid, amount_pradha: amount, fee_pradha: fee, day: now / 86_400 };
+    direct_claim_receipt(&state, address, &receipt, reward)
 }
 
 /// `POST /api/faucet/withdraw` — pay a participation balance out on-chain.
@@ -914,6 +1086,7 @@ async fn handle_http_request(
                     "rewardEmissionMonth": s.reward_month(),
                     "halvingIntervalMonths": crate::reward_policy::HALVING_MONTHS,
                     "claimPeriodSecs": 86_400,
+                    "claimPayoutMode": "on-chain",
                     "rewardModel": crate::reward_policy::REWARD_MODEL,
                     "dripDurationSecs": 0,
                     "dripModel": "none",
@@ -973,19 +1146,8 @@ async fn handle_http_request(
     }
 
     if request.starts_with("POST /api/faucet/claim") {
-        let _guard = FAUCET_WITHDRAW_LOCK.lock().await;
-        refresh_faucet_funding().await;
         let body = request.split_once("\r\n\r\n").map(|(_, body)| body).unwrap_or("");
-        let resp = match FAUCET_STATE.get() {
-            None => serde_json::json!({ "error": "faucet not ready" }),
-            Some(state) => faucet_claim_response_at(
-                &mut state.lock().unwrap(),
-                body,
-                std::path::Path::new(crate::faucet::FAUCET_LEDGER_PATH),
-                crate::faucet::FaucetState::now_secs(),
-            ),
-        }
-        .to_string();
+        let resp = direct_claim_response(body).await.to_string();
 
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\n\r\n{}",

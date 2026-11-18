@@ -102,11 +102,23 @@ pub struct TreasuryJournal {
     pub last_txid: Option<String>,
     pub total_returned_pradha: u64,
     pub last_sweep_secs: u64,
+    #[serde(default)]
+    pub submitted: Vec<PendingTransfer>,
 }
 
 impl TreasuryJournal {
     pub fn can_prepare(&self) -> bool {
-        self.pending.is_none()
+        self.pending.is_none() && self.submitted.len() < 128
+    }
+
+    pub fn record_submitted(&mut self) -> anyhow::Result<()> {
+        let pending = self.pending.as_ref().ok_or_else(|| anyhow::anyhow!("no pending transfer"))?;
+        if !self.submitted.iter().any(|item| item.transaction_id == pending.transaction_id) {
+            anyhow::ensure!(self.submitted.len() < 128, "submitted transfer queue is full");
+            self.submitted.push(pending.clone());
+        }
+        self.pending = None;
+        Ok(())
     }
 
     pub fn load(path: &Path) -> std::io::Result<Self> {
@@ -198,6 +210,16 @@ async fn cycle(
     journal: &mut TreasuryJournal,
 ) -> anyhow::Result<()> {
     *journal = TreasuryJournal::load(Path::new(TREASURY_JOURNAL_PATH))?;
+    let mut unresolved = Vec::new();
+    for mut submitted in journal.submitted.clone() {
+        if !api.journaled_transfer_accepted(&mut submitted).await? {
+            // Reuse the signed bytes if a node restart loses its mempool.
+            let _ = api.submit_journaled_transfer(&submitted).await;
+            unresolved.push(submitted);
+        }
+    }
+    journal.submitted = unresolved;
+    journal.save(Path::new(TREASURY_JOURNAL_PATH))?;
     if let Some(mut pending) = journal.pending.clone() {
         state.lock().unwrap().invalidate_funding();
         if api.journaled_transfer_accepted(&mut pending).await? {
@@ -290,6 +312,30 @@ async fn cycle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn submitted_journal_retains_transaction_without_blocking_new_payout() {
+        let transfer = PendingTransfer {
+            transaction_json: "sample-signed-transaction".into(),
+            transaction_id: "a".repeat(64),
+            amount_pradha: 100_000,
+            fee_pradha: 5820,
+            source: "sample-source".into(),
+            destination: "sample-destination".into(),
+            network: "simnet".into(),
+            withdrawal: true,
+            anchor: None,
+            input_entries: vec![],
+        };
+        let mut journal = TreasuryJournal { pending: Some(transfer.clone()), ..Default::default() };
+        assert!(!journal.can_prepare());
+        journal.record_submitted().unwrap();
+        assert!(journal.can_prepare());
+        let restored: TreasuryJournal = serde_json::from_value(serde_json::to_value(&journal).unwrap()).unwrap();
+        assert_eq!(restored.submitted[0].transaction_json, transfer.transaction_json);
+        assert_eq!(restored.submitted[0].transaction_id, transfer.transaction_id);
+        assert!(restored.pending.is_none());
+    }
 
     #[test]
     fn old_empty_journal_still_loads() {
