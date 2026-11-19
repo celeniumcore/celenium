@@ -154,7 +154,7 @@ mod tests {
     use super::*;
 
     // Kunci uji tetap: hanya untuk membuktikan derivasi alamat deterministik.
-    const TEST_SECRET: &str = "REDACTED-FAUCET-DEV-KEY";
+    const TEST_SECRET: &str = "50fb2205d2f302ff1dc8554f24e185ed6a32daba6b7a73bc89e31014439004e7";
 
     #[test]
     fn network_aware_signer_retains_mainnet_default_and_redacts_secret() {
